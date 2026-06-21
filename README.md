@@ -191,16 +191,6 @@ qq邮箱 3218633407@qq.com
 | c1 | string   | Boost最大频率 |
 | c2 | string   | Boost最大频率 |
 | c3 | string | Boost最大频率 |
-
-#### OfficialMode设置
-```json
-      "OfficialMode": {
-          "enable": false
-      },
-```
-| 字段名   | 数据类型 | 描述                                           |
-| -------- | -------- | ---------------------------------------------- |
-| enable | bool | 官方模式 开启后极速模式将恢复调速器和频率修改 确保风驰等调度能正常使用 | 
         
 #### LoadBalancing设置
 ```json
