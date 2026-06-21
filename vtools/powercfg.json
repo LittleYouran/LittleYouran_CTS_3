@@ -1,0 +1,14 @@
+{
+    "name": "MW_LittleYouran_CTS-3.0-V1",
+    "author": "掌柜-泉氿",
+    "version": "v1.0",
+    "versionCode": 202605.9,
+    "features": {
+        "strict": true,
+        "pedestal": true
+    },
+    "module": "MW_CpuTurboSched-3.0",
+    "state": "/sdcard/Android/CTS/mode.txt",
+    "entry": "/data/powercfg.sh",
+    "projectUrl": "https://github.com/MoWei-2077/MW_CpuTurboScheduler"
+}
