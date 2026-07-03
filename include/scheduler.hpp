@@ -385,7 +385,9 @@ public:
             logger.Warn("[Feas] Feas 已开启但设备无 Feas 接口，请关闭 Feas 功能");
         }
 
-        function.AllFunC();
+        if (!skipCtsIntervention()) {
+            function.AllFunC();
+        }
         release();
         if (!skipCtsIntervention()) {
             online();
