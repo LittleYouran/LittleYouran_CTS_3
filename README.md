@@ -1,12 +1,12 @@
-# CpuTurboScheduler V3.0（已停更）
+# LittleYouran_CTS
 [![C++](https://img.shields.io/badge/language-C++-%23f34b7d.svg?style=plastic)](https://en.wikipedia.org/wiki/C++)
 [![Android](https://img.shields.io/badge/platform-Android-0078d7.svg?style=plastic)](https://en.wikipedia.org/wiki/Android_(operating_system)) 
 [![AArch64](https://img.shields.io/badge/arch-AArch64-red.svg?style=plastic)](https://en.wikipedia.org/wiki/AArch64)
 [![Android Support8-17](https://img.shields.io/badge/Android%208~17-Support-green)](https://img.shields.io/badge/Android%208~17-Support-green)
 #### 前言
-MW_LittleYouran_CTS本质只是在官方原版（CPU Turbo Scheduler）添加一些功能 故 直接使用原版文本修改添加一些说明
+LittleYouran_CTS本质只是在官方原版（CPU Turbo Scheduler）添加一些功能 故 直接使用原版文本修改添加一些说明
 #### 介绍
-MW_LittleYouran_CTS 是一款基于 CPU Turbo Scheduler 二改而来的调度 只是添加了一点自己需要的功能（如 feas和风驰）其他依然跟随官方
+LittleYouran_CTS 是一款基于 CPU Turbo Scheduler 二改而来的调度 只是添加了一点自己需要的功能（如 feas和风驰）其他依然跟随官方
 CPU Turbo Scheduler
 是一款基于 C++ 编写的智能 CPU 调度工具 旨在优化 Android 设备的 CPU 性能和功耗表现而设计 通过智能调度算法 它可以根据不同的使用场景动态调整 CPU 频率以达到最佳的性能和能效平衡 <br>
 #### 工作条件
@@ -15,7 +15,7 @@ CPU Turbo Scheduler
 
 #### 修改启动时的默认模式
 1.打开/sdcard/Android/CTS/mode.txt <br>
-2.重启后查看/sdcard/Android/CTS/log.txt MW_LittleYouran_CTS 检查是否正常自启动
+2.重启后查看/sdcard/Android/CTS/log.txt LittleYouran_CTS 检查是否正常自启动
 
 ### 情景模式
 - powersave 省电
@@ -48,32 +48,32 @@ fast（极速模式未开启风驰）：全力保证游戏时的流畅度，忽�
 Q：是否会对待机功耗产生负面影响？ <br>
 A：CPU Turbo Scheduler 做了低功耗优化 由于使用了 C++ 语言 自身运行功耗很低 并不会对设备的待机功耗产生显著影响   <br>
  
-Q：为什么使用了 MW_LittleYouran_CTS （CPU Turbo Scheduler） 后功耗仍然很高？  <br> 
-A：SOC 的 AP 部分功耗主要取决于计算量和使用的频点 MW_LittleYouran_CTS （CPU Turbo Scheduler） 只能通过控制性能释放和改进频率的方式来降低功耗 如果后台应用的计算量很大 可能无法显著延长续航时间 可以通过 Scene 工具箱的进程管理器来定位问题  PS:建议全局测试时间不低于一小时 否则属于瞬时功耗 瞬时功耗不具有任何参考价值 <br>
+Q：为什么使用了 LittleYouran_CTS （CPU Turbo Scheduler） 后功耗仍然很高？  <br> 
+A：SOC 的 AP 部分功耗主要取决于计算量和使用的频点 LittleYouran_CTS （CPU Turbo Scheduler） 只能通过控制性能释放和改进频率的方式来降低功耗 如果后台应用的计算量很大 可能无法显著延长续航时间 可以通过 Scene 工具箱的进程管理器来定位问题  PS:建议全局测试时间不低于一小时 否则属于瞬时功耗 瞬时功耗不具有任何参考价值 <br>
 
 Q：何时更新 XXXX 版本？  <br>
 A：如果您觉得有需要更新的内容，请发送至邮箱：3218633407@qq.com PS:作者每周都会查看谷歌邮箱考虑是否需要实现某些功能 <br>
 
 Q：如何确保我的设备拥有并支持 风驰特性？  <br>
-A：开启 MW_LittleYouran_CTS （CPU Turbo Scheduler） 的 OfficialMode 开关并切换到极速模式 MW_LittleYouran_CTS （CPU Turbo Scheduler）将会自动识别内核的 风驰接口 如果设备没有 风驰 功能接口 将会在日志中抛出错误 CMW_LittleYouran_CTS （CPU Turbo Scheduler） 理论支持存在风驰调度接口的所有接口  <br>
+A：开启 LittleYouran_CTS （CPU Turbo Scheduler） 的 OfficialMode 开关并切换到极速模式 LittleYouran_CTS （CPU Turbo Scheduler）将会自动识别内核的 风驰接口 如果设备没有 风驰 功能接口 将会在日志中抛出错误 CLittleYouran_CTS （CPU Turbo Scheduler） 理论支持存在风驰调度接口的所有接口  <br>
 
 Q：如何确保我的设备拥有并支持 Feas特性？  <br>
-A：开启 MW_LittleYouran_CTS （CPU Turbo Scheduler） 的 Feas 开关并切换到极速模式 MW_LittleYouran_CTS （CPU Turbo Scheduler）将会自动识别内核的 Feas 接口 如果设备没有 Feas 功能接口 将会在日志中抛出错误 目前CMW_LittleYouran_CTS （CPU Turbo Scheduler） 已接入大多数内核的 Feas 接口  <br>
+A：开启 LittleYouran_CTS （CPU Turbo Scheduler） 的 Feas 开关并切换到极速模式 LittleYouran_CTS （CPU Turbo Scheduler）将会自动识别内核的 Feas 接口 如果设备没有 Feas 功能接口 将会在日志中抛出错误 目前CLittleYouran_CTS （CPU Turbo Scheduler） 已接入大多数内核的 Feas 接口  <br>
 
 Q：是否还需要关闭系统的performance boost？  <br>
-A：MW_LittleYouran_CTS （CPU Turbo Scheduler）在初始化阶段就已经关闭了大部分主流的用户态和内核态升频 如果有非常规的升频需要用户自己关闭  <br>
+A：LittleYouran_CTS （CPU Turbo Scheduler）在初始化阶段就已经关闭了大部分主流的用户态和内核态升频 如果有非常规的升频需要用户自己关闭  <br>
 
-Q：MW_LittleYouran_CTS （CPU Turbo Scheduler）和Scene工具箱是什么关系？  <br>
-A：这两个软件独立运作没有互相依赖 MW_LittleYouran_CTS （CPU Turbo Scheduler）实现了接口可供Scene工具箱调用 例如性能模式切换以及分APP性能模式 如果不安装Scene工具箱也可以使用webui实现性能模式切换 但二者选一<br>
+Q：LittleYouran_CTS （CPU Turbo Scheduler）和Scene工具箱是什么关系？  <br>
+A：这两个软件独立运作没有互相依赖 LittleYouran_CTS （CPU Turbo Scheduler）实现了接口可供Scene工具箱调用 例如性能模式切换以及分APP性能模式 如果不安装Scene工具箱也可以使用webui实现性能模式切换 但二者选一<br>
 
-Q：为什么在使用Scene工具箱接管MW_LittleYouran_CTS （CPU Turbo Scheduler）时开机需要重新开启开关 这是否意味着MW_LittleYouran_CTS （CPU Turbo Scheduler）没有正常工作？  <br>
-A：MW_LittleYouran_CTS （CPU Turbo Scheduler）在系统解锁后就会正常自启动 MW_LittleYouran_CTS （CPU Turbo Scheduler）不依赖于Scene工具箱 至于开机时需要重新打开调度开关请询问Scene工具箱的开发人员<br>
+Q：为什么在使用Scene工具箱接管LittleYouran_CTS （CPU Turbo Scheduler）时开机需要重新开启开关 这是否意味着LittleYouran_CTS （CPU Turbo Scheduler）没有正常工作？  <br>
+A：LittleYouran_CTS （CPU Turbo Scheduler）在系统解锁后就会正常自启动 LittleYouran_CTS （CPU Turbo Scheduler）不依赖于Scene工具箱 至于开机时需要重新打开调度开关请询问Scene工具箱的开发人员<br>
 
-Q：为什么在使用Scene工具箱接管MW_LittleYouran_CTS （CPU Turbo Scheduler）后 会出现一堆切换模式的日志？  <br>
-A：因为Scene工具箱会一直监听屏幕是否亮屏和息屏 当亮屏时Scene工具箱会切换一次模式 MW_LittleYouran_CTS （CPU Turbo Scheduler）监听到模式更改后就会输出一次日志并写入一些相关的参数 PS:虽然性能开销很低 但我个人认为这样会造成不必要的性能开销 所以我本人并不推荐大家去使用Scene工具箱去接管任何调度 <br>
+Q：为什么在使用Scene工具箱接管LittleYouran_CTS （CPU Turbo Scheduler）后 会出现一堆切换模式的日志？  <br>
+A：因为Scene工具箱会一直监听屏幕是否亮屏和息屏 当亮屏时Scene工具箱会切换一次模式 LittleYouran_CTS （CPU Turbo Scheduler）监听到模式更改后就会输出一次日志并写入一些相关的参数 PS:虽然性能开销很低 但我个人认为这样会造成不必要的性能开销 所以我本人并不推荐大家去使用Scene工具箱去接管任何调度 <br>
 
 Q：支不支持XXX内核？<br>
-A：目前MW_LittleYouran_CTS （CPU Turbo Scheduler）支持大部分内核 举例4.4及以上的内核 <br> 
+A：目前LittleYouran_CTS （CPU Turbo Scheduler）支持大部分内核 举例4.4及以上的内核 <br> 
 
 Q：切换情景模式后是否需要重启？<br>
 A：不需要 目前CpuTurboScheduler会监听情景模式的配置变化进行切换 <br> 
@@ -338,7 +338,7 @@ qq邮箱 3218633407@qq.com
 
 ### 情景模式的切换
 ```
-在MW_LittleYouran_CTS （CPU Turbo Scheduler）启动时会读取配置文件获取情景模式,在日志以如下方式体现：  
+在LittleYouran_CTS （CPU Turbo Scheduler）启动时会读取配置文件获取情景模式,在日志以如下方式体现：  
 2026-01-13 13:40:00 信息 -> 已启用powersave模式
 ```
 `switchInode`对应路径的文件，监听新模式名称的写入完成模式切换：  
@@ -370,4 +370,4 @@ echo "powersave" > /sdcard/Android/cts/config.txt
 [作者:MoWei 项目:LibUtils](https://github.com/MoWei-2077/MW_CpuTurboScheduler.git) <br>
 
 ### 该文档更新于:2026/08/17
-- 感谢所有用户的测试反馈 这将推进MW_LittleYouran_CTS （CPU Turbo Scheduler）的开发
+- 感谢所有用户的测试反馈 这将推进LittleYouran_CTS （CPU Turbo Scheduler）的开发
