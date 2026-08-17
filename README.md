@@ -28,6 +28,10 @@ CPU Turbo Scheduler
 - INFO 信息
 - WARNNING 警告
 - ERROR 错误
+
+#### 文件作用
+- action.sh 在路径/data/adb/modules/LittleYouran/  应对使用风驰增强模块增加了适配名单，运行后重新解析获取名单 无需重启
+- md 文件（game_packages.md）用来保存获取到的包名，路径/sdcard/Android/CTS/
   
 #### 情景模式切换
 powersave（省电模式）：在保证基本流畅度的同时，尽可能降低功耗。推荐'待机'使用 <br>
