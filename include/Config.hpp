@@ -72,7 +72,5 @@ namespace Config {
         std::atomic_bool active{false};
     }
 
-    // Serialize profile writes from the mode watcher, 风驰 watcher and
-    // auxiliary optimization callbacks.
     inline std::mutex applyMutex;
 }; 
