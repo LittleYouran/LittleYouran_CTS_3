@@ -3,6 +3,7 @@
 #include "Utils.hpp"
 #include "Logger.hpp"
 #include "Function.hpp"
+#include "ebpf.hpp"
 #include <poll.h>
 #include <errno.h>
 
@@ -11,6 +12,7 @@
 class OnePlus {
 private:
     static constexpr const char* topAppProcs = "/dev/cpuset/top-app/cgroup.procs";
+    static constexpr const char* fgProcs = "/dev/cpuset/foreground/cgroup.procs";
     static constexpr const char* modePath = "/sdcard/Android/CTS/mode.txt";
     static constexpr const char* availGovPath =
         "/sys/devices/system/cpu/cpufreq/policy0/scaling_available_governors";
@@ -34,6 +36,7 @@ private:
     std::string defaultMode;
     bool mkdirDone = false;
     bool horaeActive = false;
+    std::function<void(int)> boostCb;   // 前台切换回调 (pid>0=eBPF事件, 0=inotify事件), Schedule 注册
 
     // 从 MD 读取: 数据库不可用时的包名兜底来源
     void loadPackagesFromMd() {
@@ -160,76 +163,53 @@ private:
         return (strstr(buf, "hmbird") != nullptr || strstr(buf, "scx") != nullptr);
     }
 
-    // 小窗检测: 仅当游戏为前台焦点且窗口全屏时判定活跃
-    // 2.1 游戏霸占全屏 → 活跃
-    // 2.2 游戏霸占全屏 + 其他应用小窗 → 仍活跃 (焦点仍在游戏)
-    // 2.3 其他应用全屏 + 游戏小窗 → 不活跃
-    // 2.4 游戏在后台 → 不活跃
+    // 前台检测: 游戏进程处于 top-app/foreground cpuset 时判定活跃 (纯文件读取)
+    // 小窗/悬浮窗不移动游戏进程 → 游戏全屏时无论焦点在哪都保持活跃, 不蹦迪
+    // (修复1: 精确匹配主进程, 避免游戏服务进程误触发风驰)
+    // (修复2: Android 会把进程放入 top-app/g-others 等子 cgroup, 需检查 cgroup 路径前缀)
+    // 场景: 2.1 游戏全屏→top-app 活跃 / 2.2 游戏全屏+他窗小窗→游戏仍在 top-app 活跃
+    //       2.3 他窗全屏+游戏小窗→游戏移出 top-app 不活跃 / 2.4 游戏后台→不在 top-app 不活跃
+    bool pidInGameCgroup(int pid) {
+        char cgPath[64];
+        char cgbuf[512] = { 0 };
+        FastSnprintf(cgPath, sizeof(cgPath), "/proc/%d/cgroup", pid);
+        const int fd = open(cgPath, O_RDONLY);
+        if (fd < 0) return false;
+        const ssize_t cn = read(fd, cgbuf, sizeof(cgbuf) - 1);
+        close(fd);
+        if (cn <= 0) return false;
+        cgbuf[cn] = 0;
+
+        char* line = strtok(cgbuf, "\n");
+        while (line) {
+            if (strstr(line, "cpuset") &&
+                (strstr(line, "/top-app") || strstr(line, "/foreground"))) {
+                return true;
+            }
+            line = strtok(nullptr, "\n");
+        }
+        return false;
+    }
+
     bool isGameActive() {
         if (gamePackages.empty()) return false;
 
-        // 1) 当前焦点窗口是否属于游戏
-        char focus[512] = { 0 };
-        utils.popenRead("dumpsys window | grep mCurrentFocus", focus, sizeof(focus) - 1);
-        if (!strstr(focus, "Window{")) return false;   // 无焦点窗口
-        const char* slash = strchr(focus, '/');
-        if (!slash) return false;
-        const char* pkgStart = slash;
-        while (pkgStart > focus && pkgStart[-1] != ' ' && pkgStart[-1] != '{') pkgStart--;
-
-        bool isGameFocus = false;
         for (const auto& pkg : gamePackages) {
-            if ((size_t)(slash - pkgStart) == pkg.size() &&
-                strncmp(pkgStart, pkg.c_str(), pkg.size()) == 0) {
-                isGameFocus = true;
-                break;
+            char cmd[192];
+            char out[1024] = { 0 };
+            FastSnprintf(cmd, sizeof(cmd), "pidof %s", pkg.c_str());
+            const size_t len = utils.popenRead(cmd, out, sizeof(out) - 1);
+            if (len == 0) continue;
+            out[len] = 0;
+
+            char* pidStr = strtok(out, " \n\t");
+            while (pidStr) {
+                const int pid = atoi(pidStr);
+                if (pid > 0 && pidInGameCgroup(pid)) return true;
+                pidStr = strtok(nullptr, " \n\t");
             }
         }
-        if (!isGameFocus) return false;   // 2.3 / 2.4: 焦点不是游戏
-
-        // 2) 焦点是游戏 → 判定窗口是否全屏 (2.1 / 2.2)
-        // 屏幕尺寸
-        int sw = 0, sh = 0;
-        char out[128] = { 0 };
-        utils.popenRead("wm size", out, sizeof(out) - 1);
-        const char* sz = strstr(out, "size:");
-        if (sz) {
-            sz += 5;
-            while (*sz == ' ' || *sz == '\t') sz++;
-            sw = atoi(sz);
-            const char* x = strchr(sz, 'x');
-            if (x) sh = atoi(x + 1);
-        }
-        if (sw <= 0 || sh <= 0) return true;   // 拿不到尺寸时保守按活跃
-
-        // 焦点窗口 mFrame (grep 过滤后解析)
-        char win[16384] = { 0 };
-        utils.popenRead("dumpsys window windows | grep -E 'Window #|mCurrentFocus=true|mFrame='",
-                        win, sizeof(win) - 1);
-        const char* cur = strstr(win, "mCurrentFocus=true");
-        if (!cur) return true;   // 取不到焦点窗口时保守按活跃
-
-        // 向上找包含焦点窗口的窗口块头
-        const char* blockHead = win;
-        const char* search = win;
-        while ((search = strstr(search, "Window #")) != nullptr && search < cur) {
-            blockHead = search;
-            search++;
-        }
-        // 块内找 mFrame=[l,t][r,b]
-        const char* frame = strstr(blockHead, "mFrame=");
-        if (!frame) return true;
-        const char* rb = strchr(frame, ']');
-        if (!rb) return true;
-        const char* lb = rb + 1;                 // [r,b]
-        if (*lb != '[') return true;
-        const int fw = atoi(lb + 1);
-        const char* comma = strchr(lb, ',');
-        const int fh = comma ? atoi(comma + 1) : 0;
-        if (fw <= 0 || fh <= 0) return true;
-
-        // 全屏容差 10%
-        return (fw >= sw * 9 / 10 && fh >= sh * 9 / 10);
+        return false;
     }
 
     std::string readMode() {
@@ -288,7 +268,6 @@ private:
         // 进入风驰: 关闭所有附加优化, 游戏满血运行
         Function function;
         function.CloseAllFunC();
-        logger.Info("风驰: 已关闭附加优化");
 
         setHorae(true);
     }
@@ -319,6 +298,34 @@ private:
 
         sleep(2);
 
+        // eBPF 事件源优先 (纯事件驱动, 空闲 0 CPU); 初始化失败回退 inotify
+        Ebpf ebpf;
+        if (ebpf.Init()) {
+            while (true) {
+                const int ev = ebpf.WaitEvent();   // 阻塞等待内核事件
+                if (ev == -1) {
+                    logger.Info("风驰: 检测到 MD 文件变化 重新获取包名");
+                    loadPackages();
+                    if (gamePackages.empty()) loadPackagesFromMd();
+                    if (gamePackages.empty()) continue;
+                }
+
+                if (boostCb) boostCb(ev);   // 前台切换 → LaunchBoost (ev = 被移动进程 pid)
+
+                utils.sleep_ms(300);   // 防抖
+
+                if (isGameActive()) {
+                    enterGame();
+                } else {
+                    exitGame();
+                }
+            }
+            return;
+        }
+
+        // 回退: inotify 事件源
+        logger.Info("风驰: 回退 inotify 事件源");
+
         const int fd = inotify_init();
         if (fd < 0) {
             logger.Error("风驰: 无法初始化 inotify");
@@ -326,8 +333,9 @@ private:
         }
 
         const int wdCpuset = inotify_add_watch(fd, topAppProcs, IN_MODIFY);
+        const int wdFg = inotify_add_watch(fd, fgProcs, IN_MODIFY);
         const int wdMd = inotify_add_watch(fd, mdPath, IN_MODIFY | IN_CLOSE_WRITE);
-        if (wdCpuset < 0 || wdMd < 0) {
+        if (wdCpuset < 0 || wdFg < 0 || wdMd < 0) {
             logger.Error("风驰: inotify 监听失败");
             close(fd);
             return;
@@ -337,7 +345,7 @@ private:
 
         char buf[8192];
         while (true) {
-            // 事件驱动: 前台切换或 MD 变化时触发检测
+            // 纯事件驱动: 阻塞等待 inotify 事件 (空闲 0 CPU)
             const ssize_t len = read(fd, buf, sizeof(buf));
             if (len <= 0) continue;
 
@@ -357,6 +365,8 @@ private:
                 if (gamePackages.empty()) continue;
             }
 
+            if (boostCb) boostCb(0);   // inotify 前台事件 → LaunchBoost (0 = 前台相关事件)
+
             utils.sleep_ms(300);   // 防抖
 
             if (isGameActive()) {
@@ -367,6 +377,7 @@ private:
         }
 
         inotify_rm_watch(fd, wdCpuset);
+        inotify_rm_watch(fd, wdFg);
         inotify_rm_watch(fd, wdMd);
         close(fd);
     }
@@ -386,6 +397,11 @@ public:
 
     void Start() {
         std::thread(&OnePlus::monitorTask, this).detach();
+    }
+
+    // 前台切换回调 (Schedule 注册 LaunchBoost 逻辑)
+    void setBoostCallback(std::function<void(int)> cb) {
+        boostCb = std::move(cb);
     }
 
     bool isGameModeActive() {

@@ -9,7 +9,6 @@ class Schedule {
 private:
     static constexpr const char* configPath = "/sdcard/Android/CTS/mode.txt";
     static constexpr const char* jsonPath = "/sdcard/Android/CTS/config.json";
-    static constexpr const char* cpusetEventPath = "/dev/cpuset/top-app/cgroup.procs";
     static constexpr const char* onlinePath = "/sys/devices/system/cpu/cpu%d/online";
     static constexpr const char* SchedParamPath = "/sys/devices/system/cpu/cpufreq/policy%d/%s/%s";
     static constexpr const char* GovernorPath = "/sys/devices/system/cpu/cpufreq/policy%d/scaling_governor";
@@ -35,7 +34,22 @@ public:
         Init();
         threads.emplace_back(thread(&Schedule::configTriggerTask, this));
         threads.emplace_back(thread(&Schedule::jsonTriggerTask, this));
-        threads.emplace_back(thread(&Schedule::cpuSetTriggerTask, this));
+        // LaunchBoost 统一由风驰事件源驱动 (前台切换回调)
+        // pid>0 = eBPF 事件: 仅前台相关 cgroup (top-app/foreground) 才升频, 避免后台移动误触发
+        // pid=0 = inotify 事件: 本身就是 top-app/foreground 变化, 直接升频
+        oneoppo.setBoostCallback([this](int pid) {
+            if (!LaunchBoost::enable) return;
+            if (pid > 0) {
+                char cg[512] = { 0 };
+                char path[64];
+                FastSnprintf(path, sizeof(path), "/proc/%d/cgroup", pid);
+                utils.readString(path, cg, sizeof(cg) - 1);
+                if (!strstr(cg, "top-app") && !strstr(cg, "foreground")) return;
+            }
+            std::lock_guard<std::mutex> lock(Config::applyMutex);
+            cpuBoost = true;
+            release();
+        });
         oneoppo.Start();
         wsServer.Start();
     }
@@ -146,41 +160,6 @@ public:
             function.AllFunC();
         }
     }
-
-    void cpuSetTriggerTask() {
-        if (!LaunchBoost::enable) return;
-        
-        sleep(1);
-        const int fd = inotify_init();      
-        if (fd < 0) {
-            logger.Error("无法初始化 inotify");
-            exit(-1);
-        }
-
-        const int wd = inotify_add_watch(fd, cpusetEventPath, IN_MODIFY);
-        if (wd < 0) {
-            logger.Error("inotify 初始化 %s 失败", cpusetEventPath);
-            exit(-1);
-        }
-
-        char buf[8192];
-
-        logger.Info("监听顶层应用切换事件成功");
-
-        while (read(fd, buf, sizeof(buf)) > 0) {
-            {
-                std::lock_guard<std::mutex> lock(Config::applyMutex);
-                cpuBoost = true;
-                release();
-            }
-            logger.Debug("前台进程已切换 已触发LaunchBoost");
-            utils.sleep_ms(500); // 防抖s
-        }
-
-        inotify_rm_watch(fd, wd);
-        close(fd);
-    }
-    
 
     void Init() {
         char buf[256] = { 0 };
