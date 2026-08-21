@@ -163,12 +163,6 @@ private:
         return (strstr(buf, "hmbird") != nullptr || strstr(buf, "scx") != nullptr);
     }
 
-    // 前台检测: 游戏进程处于 top-app/foreground cpuset 时判定活跃 (纯文件读取)
-    // 小窗/悬浮窗不移动游戏进程 → 游戏全屏时无论焦点在哪都保持活跃, 不蹦迪
-    // (修复1: 精确匹配主进程, 避免游戏服务进程误触发风驰)
-    // (修复2: Android 会把进程放入 top-app/g-others 等子 cgroup, 需检查 cgroup 路径前缀)
-    // 场景: 2.1 游戏全屏→top-app 活跃 / 2.2 游戏全屏+他窗小窗→游戏仍在 top-app 活跃
-    //       2.3 他窗全屏+游戏小窗→游戏移出 top-app 不活跃 / 2.4 游戏后台→不在 top-app 不活跃
     bool pidInGameCgroup(int pid) {
         char cgPath[64];
         char cgbuf[512] = { 0 };
@@ -246,9 +240,8 @@ private:
         horaeActive = enable;
     }
 
-    // 切换逻辑 (最简约): 进入游戏切 fast, 退出恢复原模式
     void enterGame() {
-        if (!defaultMode.empty()) return;   // 已在游戏模式
+        if (!defaultMode.empty()) return; 
 
         {
             std::lock_guard<std::mutex> lock(Config::applyMutex);
@@ -265,7 +258,6 @@ private:
             logger.Info("风驰: 切换为极速模式 (原模式: %s)", defaultMode.c_str());
         }
 
-        // 进入风驰: 关闭所有附加优化, 游戏满血运行
         Function function;
         function.CloseAllFunC();
 
@@ -273,7 +265,7 @@ private:
     }
 
     void exitGame() {
-        if (defaultMode.empty()) return;    // 非游戏模式
+        if (defaultMode.empty()) return;
 
         const std::string restoreMode = defaultMode;
         defaultMode.clear();
@@ -285,7 +277,6 @@ private:
             logger.Info("风驰: 恢复模式 %s", restoreMode.c_str());
         }
 
-        // 退出风驰: 重新应用附加优化
         Function function;
         function.AllFunC();
         logger.Info("退出风驰: 已恢复额外优化");
@@ -298,11 +289,10 @@ private:
 
         sleep(2);
 
-        // eBPF 事件源优先 (纯事件驱动, 空闲 0 CPU); 初始化失败回退 inotify
         Ebpf ebpf;
         if (ebpf.Init()) {
             while (true) {
-                const int ev = ebpf.WaitEvent();   // 阻塞等待内核事件
+                const int ev = ebpf.WaitEvent();
                 if (ev == -1) {
                     logger.Info("风驰: 检测到 MD 文件变化 重新获取包名");
                     loadPackages();
@@ -310,7 +300,7 @@ private:
                     if (gamePackages.empty()) continue;
                 }
 
-                if (boostCb) boostCb(ev);   // 前台切换 → LaunchBoost (ev = 被移动进程 pid)
+                if (boostCb) boostCb(ev);
 
                 utils.sleep_ms(300);   // 防抖
 
@@ -323,7 +313,6 @@ private:
             return;
         }
 
-        // 回退: inotify 事件源
         logger.Info("风驰: 回退 inotify 事件源");
 
         const int fd = inotify_init();
@@ -345,7 +334,6 @@ private:
 
         char buf[8192];
         while (true) {
-            // 纯事件驱动: 阻塞等待 inotify 事件 (空闲 0 CPU)
             const ssize_t len = read(fd, buf, sizeof(buf));
             if (len <= 0) continue;
 
