@@ -26,15 +26,14 @@ public:
         CfsSchedOpt();
     }
 
-    // 关闭附加优化: 进入风驰(游戏)时调用, 恢复系统默认; 退出风驰时由 AllFunC 重新应用
+    // 关闭附加优化
     void CloseAllFunC() {
-        // Cpuset 恢复默认(全部在线核心放开)
         char cpuOnline[64] = { 0 };
         utils.readString("/sys/devices/system/cpu/online", cpuOnline, sizeof(cpuOnline) - 1);
         if (cpuOnline[0] != '\0') {
             char* nl = strchr(cpuOnline, '\n');
             if (nl) *nl = '\0';
-            const char* all = cpuOnline;   // 形如 "0-7"
+            const char* all = cpuOnline;
             utils.FileWrite("/dev/cpuset/top-app/cpus", all);
             utils.FileWrite("/dev/cpuset/foreground/cpus", all);
             utils.FileWrite("/dev/cpuset/background/cpus", all);
@@ -43,7 +42,6 @@ public:
             logger.Debug("Cpuset 恢复默认: %s", all);
         }
 
-        // GPU 恢复默认(性能层级0, 不再限制)
         if (checkQcom()) {
             utils.WriteInt("/sys/class/kgsl/kgsl-3d0/default_pwrlevel", 0);
             utils.WriteInt("/sys/class/kgsl/kgsl-3d0/min_pwrlevel", 0);
@@ -51,7 +49,6 @@ public:
             logger.Debug("GPU 恢复默认性能层级");
         }
 
-        // CFS 调度器参数恢复内核默认
         utils.FileWrite("/proc/sys/kernel/sched_schedstats", "0");
         utils.FileWrite("/proc/sys/kernel/sched_latency_ns", "6000000");
         utils.FileWrite("/proc/sys/kernel/sched_migration_cost_ns", "500000");
@@ -146,7 +143,6 @@ public:
     }
 
     bool FeasFunc(bool Enable) {
-        // 后续可直接获取前台 检测是否是游戏 来确定是否需要开启"Feas"
         if (checkQcomFeas()) {
             utils.FileWrite(qcomFeas, Enable ? "1" : "0");
             logger.Debug("QCOM Feas 已%s", Enable ? "开启" : "关闭");
