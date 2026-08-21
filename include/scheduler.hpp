@@ -85,7 +85,6 @@ public:
         function.FeasFunc(false);
     }
 
-    // 风驰: 频率不限制 (先切一次 performance 再切目标调速器)
     void applyOnePlusMode() {
         const char* gov = oneoppo.getGovernor();
         logger.Info("风驰增强: 调速器 %s 频率不限制", gov);
@@ -107,14 +106,12 @@ public:
             cpuBoost = false;
             Release();
         } else if (conf.mode == "fast" && GameMode::active) {
-            // 风驰的 fast: 有 hmbird/scx 走频率不限制(不按配置文件), 否则按配置文件
             if (oneoppo.getGovernor() != nullptr) {
                 applyOnePlusMode();
             } else {
                 Release();
             }
         } else {
-            // 非风驰 (无论是否 fast) 及官方模式: 按配置文件 (自动恢复官方调速器)
             Release();
         }
     }
@@ -163,7 +160,6 @@ public:
 
     void Init() {
         char buf[256] = { 0 };
-        // 进程名: Littleyouran (修复: pidof 无输出(无重复进程)时 popenRead 返回 0, 不应视为检测失败)
         const size_t runLen = utils.popenRead("pidof Littleyouran", buf, sizeof(buf) - 1);
         if (runLen > 0) {
             buf[runLen] = 0;
