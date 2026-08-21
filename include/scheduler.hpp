@@ -2,8 +2,8 @@
 
 #include "LibUtils.hpp"
 #include "Function.hpp"
-#include "oneoppo.hpp"
 #include "WebSocket.hpp"
+#include "onePlus.hpp"
 
 class Schedule {
 private:
@@ -19,7 +19,7 @@ private:
     std::vector<thread> threads;
 
     Function function;
-    OneOppo oneoppo;
+    OnePlus oneoppo;
     WebSocketServer wsServer;
     JsonConfig conf;
     Logger logger;
@@ -71,6 +71,7 @@ public:
         function.FeasFunc(false);
     }
 
+    // 风驰: 频率不限制 (先切一次 performance 再切目标调速器)
     void applyOnePlusMode() {
         const char* gov = oneoppo.getGovernor();
         logger.Info("风驰增强: 调速器 %s 频率不限制", gov);
@@ -85,18 +86,6 @@ public:
         GameMode::active = true;
     }
 
-    void ReleaseFast() {
-        for (int i = 0; i <= 3; i++) {
-            if (Policy::CpuPolicy[i] == -1) continue;
-            FreqWriter(Policy::CpuPolicy[i], Performances::MinFreq[i], Performances::MaxFreq[i], "performance");
-        }
-        for (int i = 0; i <= 3; i++) {
-            if (Policy::CpuPolicy[i] == -1) continue;
-            FreqWriter(Policy::CpuPolicy[i], Performances::MinFreq[i], Performances::MaxFreq[i], Performances::CpuGovernor[i]);
-        }
-        function.FeasFunc(false);
-    }
-
     void release() {
         logger.Info("情景模式: %s 已启用", conf.mode.c_str());
         if (cpuBoost) {
@@ -104,12 +93,14 @@ public:
             cpuBoost = false;
             Release();
         } else if (conf.mode == "fast" && GameMode::active) {
-            applyOnePlusMode();
-        } else if (conf.mode == "fast") {
-            GameMode::active = false;
-            ReleaseFast();
+            // 风驰的 fast: 有 hmbird/scx 走频率不限制(不按配置文件), 否则按配置文件
+            if (oneoppo.getGovernor() != nullptr) {
+                applyOnePlusMode();
+            } else {
+                Release();
+            }
         } else {
-            GameMode::active = false;
+            // 非风驰 (无论是否 fast) 及官方模式: 按配置文件 (自动恢复官方调速器)
             Release();
         }
     }
@@ -135,32 +126,13 @@ public:
 
     void configTriggerTask() {
         sleep(2);
-        time_t lastMtime = 0;
-        std::string lastMode;
         while (true) {
             utils.InotifyMain(configPath, IN_CLOSE_WRITE | IN_MODIFY);
-
-            for (int i = 0; i < 5; i++) {
-                utils.sleep_ms(200);
-                struct stat st;
-                if (stat(configPath, &st) == 0) {
-                    if (st.st_mtime == lastMtime) break;
-                    lastMtime = st.st_mtime;
-                }
-            }
-
-            conf.readConfig();
-
-            if (conf.mode == lastMode && !GameMode::active) {
-                continue;
-            }
-            lastMode = conf.mode;
-
+            std::lock_guard<std::mutex> lock(Config::applyMutex);
+            if (!conf.readConfig()) continue;
             release();
-            if (!GameMode::active) {
-                SchedParam();
-                online();
-            }
+            SchedParam();
+            online();
         }
     }
 
@@ -168,11 +140,10 @@ public:
         sleep(2);
         while (true) {
             utils.InotifyMain(jsonPath, IN_CLOSE_WRITE | IN_MODIFY);
+            std::lock_guard<std::mutex> lock(Config::applyMutex);
             conf.readConfig();
             logger.setLogLevel(Meta::loglevel);
-            if (!GameMode::active) {
-                function.AllFunC();
-            }
+            function.AllFunC();
         }
     }
 
@@ -197,8 +168,11 @@ public:
         logger.Info("监听顶层应用切换事件成功");
 
         while (read(fd, buf, sizeof(buf)) > 0) {
-            cpuBoost = true;
-            release();
+            {
+                std::lock_guard<std::mutex> lock(Config::applyMutex);
+                cpuBoost = true;
+                release();
+            }
             logger.Debug("前台进程已切换 已触发LaunchBoost");
             utils.sleep_ms(500); // 防抖s
         }
@@ -210,17 +184,17 @@ public:
 
     void Init() {
         char buf[256] = { 0 };
-        if (!utils.popenRead("pidof yourancts", buf, sizeof(buf))) {
-            logger.Error("进程检测失败");
-            exit(-1);
-        }
+        // 进程名: Littleyouran (修复: pidof 无输出(无重复进程)时 popenRead 返回 0, 不应视为检测失败)
+        const size_t runLen = utils.popenRead("pidof Littleyouran", buf, sizeof(buf) - 1);
+        if (runLen > 0) {
+            buf[runLen] = 0;
+            auto ptr = strchr(buf, ' ');
 
-        auto ptr = strchr(buf, ' ');
-
-        if (ptr) {
-            logger.Error("CTS调度已经在运行(pid: %s), 当前进程(pid:%d)即将退出", buf, getpid());
-            printf("\n!!! \n!!! CTS调度已经在运行(pid: %s), 当前进程(pid:%d)即将退出 \n!!!\n\n", buf, getpid());
-            exit(-1);
+            if (ptr) {
+                logger.Error("CTS调度已经在运行(pid: %s), 当前进程(pid:%d)即将退出", buf, getpid());
+                printf("\n!!! \n!!! CTS调度已经在运行(pid: %s), 当前进程(pid:%d)即将退出 \n!!!\n\n", buf, getpid());
+                exit(-1);
+            }
         }
 
         logger.clear_log();
@@ -230,14 +204,10 @@ public:
         logger.Info("版本: %d", Meta::version);
         logger.Info("作者: %s", Meta::author.empty() ? "Unknown" : Meta::author.c_str());
         logger.Info("日志等级: %s", Meta::loglevel.empty() ? "INFO" : Meta::loglevel.c_str());
-        if (!GameMode::active) {
-            function.AllFunC();
-        }
+        function.AllFunC();
         oneoppo.Init();
         release();
-        if (!GameMode::active) {
-            online();
-            SchedParam();
-        }
+        online();
+        SchedParam();
     }
 };

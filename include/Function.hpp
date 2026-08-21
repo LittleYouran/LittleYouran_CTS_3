@@ -25,6 +25,48 @@ public:
         disableGpuBoost();
         CfsSchedOpt();
     }
+
+    // 关闭附加优化: 进入风驰(游戏)时调用, 恢复系统默认; 退出风驰时由 AllFunC 重新应用
+    void CloseAllFunC() {
+        // Cpuset 恢复默认(全部在线核心放开)
+        char cpuOnline[64] = { 0 };
+        utils.readString("/sys/devices/system/cpu/online", cpuOnline, sizeof(cpuOnline) - 1);
+        if (cpuOnline[0] != '\0') {
+            char* nl = strchr(cpuOnline, '\n');
+            if (nl) *nl = '\0';
+            const char* all = cpuOnline;   // 形如 "0-7"
+            utils.FileWrite("/dev/cpuset/top-app/cpus", all);
+            utils.FileWrite("/dev/cpuset/foreground/cpus", all);
+            utils.FileWrite("/dev/cpuset/background/cpus", all);
+            utils.FileWrite("/dev/cpuset/system-background/cpus", all);
+            utils.FileWrite("/dev/cpuset/restricted/cpus", all);
+            logger.Debug("Cpuset 恢复默认: %s", all);
+        }
+
+        // GPU 恢复默认(性能层级0, 不再限制)
+        if (checkQcom()) {
+            utils.WriteInt("/sys/class/kgsl/kgsl-3d0/default_pwrlevel", 0);
+            utils.WriteInt("/sys/class/kgsl/kgsl-3d0/min_pwrlevel", 0);
+            utils.WriteInt("/sys/class/kgsl/kgsl-3d0/max_pwrlevel", 0);
+            logger.Debug("GPU 恢复默认性能层级");
+        }
+
+        // CFS 调度器参数恢复内核默认
+        utils.FileWrite("/proc/sys/kernel/sched_schedstats", "0");
+        utils.FileWrite("/proc/sys/kernel/sched_latency_ns", "6000000");
+        utils.FileWrite("/proc/sys/kernel/sched_migration_cost_ns", "500000");
+        utils.FileWrite("/proc/sys/kernel/sched_min_granularity_ns", "1000000");
+        utils.FileWrite("/proc/sys/kernel/sched_wakeup_granularity_ns", "1000000");
+        utils.FileWrite("/proc/sys/kernel/sched_nr_migrate", "32");
+        utils.FileWrite("/proc/sys/kernel/sched_util_clamp_min", "0");
+        utils.FileWrite("/proc/sys/kernel/sched_util_clamp_max", "1024");
+        if (checkEasSched()) {
+            utils.FileWrite("/proc/sys/kernel/sched_energy_aware", "1");
+        }
+        logger.Debug("CFS 调度器参数恢复默认");
+
+        logger.Info("风驰: 已关闭附加优化");
+    }
     
     void cpusetFunction() {
         if (!Cpuset::enable) return;

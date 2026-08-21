@@ -82,7 +82,7 @@ public:
                 #endif
             }
         } catch (const qlib::exception& e) {
-            logger.Error("Meta节点异常 错误消息: %s", e.what());
+            logger.Error("Meta节点异常 错误消息: %d", e.what());
         }
 
         try {
@@ -154,7 +154,7 @@ public:
                 logger.Debug("Sched_util_clamp_max: %s", Scheduler::Sched_util_clamp_max.c_str());
             #endif
         } catch (const qlib::exception& e) {
-            logger.Error("Function节点异常 错误消息: %s", e.what());
+            logger.Error("Function节点异常 错误消息: %d", e.what());
         }
 
         LoadConfig();
@@ -227,7 +227,7 @@ public:
                 }
             }
         } catch (const qlib::exception& e) {
-            logger.Error("情景模式异常 错误消息: %s", e.what());
+            logger.Error("情景模式异常 错误消息: %d", e.what());
         }
         
         return true;
