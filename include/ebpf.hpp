@@ -14,7 +14,7 @@
 class Ebpf {
 private:
     static constexpr int MAX_CPU = 8;
-    static constexpr int PERF_PAGES = 1 + 4;
+    static constexpr int PERF_PAGES = 1 + 32;   // 128KB/cpu, 防事件风暴丢事件(丢事件会导致状态卡死)
 
     Utils utils;
     Logger logger;
@@ -191,11 +191,21 @@ public:
             if (h == t) continue;
             char* data = (char*)bases[c] + mp->data_offset;
             size_t dataSize = mp->data_size;
-            while (t < h) {
+            unsigned int bad = 0;
+            while (t < h && bad < 64) {   // 坏记录保护: 最多连续 64 条异常
                 unsigned int off = (unsigned int)(t % dataSize);
+                // 边界防护: 记录头(8) + raw_size(4) + pid(4) 必须完整落在 buffer 内
+                if (off + 12 > dataSize) break;
                 unsigned short recSize = *(unsigned short*)(data + off + 6);
+                // 记录长度校验: 合理范围 [12, 4096], 否则视为坏记录丢弃整个 buffer
+                if (recSize < 12 || recSize > 4096) {
+                    bad++;
+                    t = h;   // 丢弃剩余数据, 重新同步
+                    mp->data_tail = t;
+                    break;
+                }
                 unsigned int pid = *(unsigned int*)(data + off + 12);
-                t += recSize >= 8 ? recSize : 16;
+                t += recSize;
                 mp->data_tail = t;
                 if (pid > 0) return (int)pid;
             }

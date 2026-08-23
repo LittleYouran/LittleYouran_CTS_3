@@ -21,19 +21,34 @@ private:
     Logger logger;
 public:
     void AllFunC() {
+        DisableSystemFreqLimit();
         cpusetFunction();
         disableGpuBoost();
         CfsSchedOpt();
     }
+    void DisableSystemFreqLimit() {
+        if (!utils.FileWriteChecked("/sys/kernel/msm_performance/parameters/cpu_max_freq",
+                        "0:9999999 1:9999999 2:9999999 3:9999999 4:9999999 5:9999999 6:9999999 7:9999999"))
+            logger.Warn("解除 msm cpu_max_freq 限制失败");
+        if (!utils.FileWriteChecked("/sys/kernel/msm_performance/parameters/cpu_min_freq",
+                        "0:0 1:0 2:0 3:0 4:0 5:0 6:0 7:0"))
+            logger.Warn("解除 msm cpu_min_freq 限制失败");
+        chmod("/sys/kernel/msm_performance/parameters/cpu_max_freq", 0000);
+        chmod("/sys/kernel/msm_performance/parameters/cpu_min_freq", 0000);
+        if (access("/proc/game_opt", F_OK) == 0) {
+            if (!utils.FileWriteChecked("/proc/game_opt/disable_cpufreq_limit", "1"))
+                logger.Warn("game_opt disable_cpufreq_limit 写入失败");
+        }
+        logger.Info("已解除系统频率限制");
+    }
 
-    // 关闭附加优化
     void CloseAllFunC() {
         char cpuOnline[64] = { 0 };
         utils.readString("/sys/devices/system/cpu/online", cpuOnline, sizeof(cpuOnline) - 1);
         if (cpuOnline[0] != '\0') {
             char* nl = strchr(cpuOnline, '\n');
             if (nl) *nl = '\0';
-            const char* all = cpuOnline;
+            const char* all = cpuOnline;   // 形如 "0-7"
             utils.FileWrite("/dev/cpuset/top-app/cpus", all);
             utils.FileWrite("/dev/cpuset/foreground/cpus", all);
             utils.FileWrite("/dev/cpuset/background/cpus", all);

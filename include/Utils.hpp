@@ -87,6 +87,21 @@ public:
             chmod(filePath, 0444);
         }
     }
+
+    // 错误感知写入: 关键路径(频率/调速器/解除限制)用, 失败返回 false 便于调用方记录
+    bool FileWriteChecked(const char* filePath, const char* content) noexcept {
+        int fd = open(filePath, O_WRONLY | O_NONBLOCK, 0666);
+        if (fd < 0) {
+            chmod(filePath, 0666);
+            fd = open(filePath, O_WRONLY | O_CREAT | O_NONBLOCK);
+        }
+        if (fd < 0) return false;
+
+        const size_t len = Faststrlen(content);
+        bool ok = (write(fd, content, len) == (ssize_t)len);
+        close(fd);
+        return ok;
+    }
     
     void FileWrite(const std::string& filePath, const std::string& content) noexcept {
         int fd = open(filePath.c_str(), O_WRONLY | O_NONBLOCK, 0666);

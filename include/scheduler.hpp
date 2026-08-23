@@ -56,15 +56,18 @@ public:
 
     void FreqWriter(const int Policy, const string_t& MinFreq, const string_t& MaxFreq, const string_t& Governor) {
         FastSnprintf(temp, sizeof(temp), MinFreqPath, Policy);
-        utils.FileWrite(temp, MinFreq);
+        if (!utils.FileWriteChecked(temp, MinFreq.c_str()))
+            logger.Warn("频率写入失败: %s", temp);
         logger.Debug("CPU簇: %d 最小频率: %s", Policy, MinFreq.c_str());
 
         FastSnprintf(temp, sizeof(temp), MaxFreqPath, Policy);
-        utils.FileWrite(temp, MaxFreq);
+        if (!utils.FileWriteChecked(temp, MaxFreq.c_str()))
+            logger.Warn("频率写入失败: %s", temp);
         logger.Debug("CPU簇: %d 最大频率: %s", Policy, MaxFreq.c_str());
 
         FastSnprintf(temp, sizeof(temp), GovernorPath, Policy);
-        utils.FileWrite(temp, Governor);
+        if (!utils.FileWriteChecked(temp, Governor.c_str()))
+            logger.Warn("调速器写入失败: %s", temp);
         logger.Debug("CPU簇: %d 调速器: %s", Policy, Governor.c_str());
     }
 
@@ -85,6 +88,7 @@ public:
         function.FeasFunc(false);
     }
 
+    // 风驰: 频率不限制 (先切一次 performance 再切目标调速器)
     void applyOnePlusMode() {
         const char* gov = oneoppo.getGovernor();
         logger.Info("风驰增强: 调速器 %s 频率不限制", gov);
@@ -106,12 +110,14 @@ public:
             cpuBoost = false;
             Release();
         } else if (conf.mode == "fast" && GameMode::active) {
+            // 风驰的 fast: 有 hmbird/scx 走频率不限制(不按配置文件), 否则按配置文件
             if (oneoppo.getGovernor() != nullptr) {
                 applyOnePlusMode();
             } else {
                 Release();
             }
         } else {
+            // 非风驰 (无论是否 fast) 及官方模式: 按配置文件 (自动恢复官方调速器)
             Release();
         }
     }
@@ -160,6 +166,7 @@ public:
 
     void Init() {
         char buf[256] = { 0 };
+        // 进程名: Littleyouran (修复: pidof 无输出(无重复进程)时 popenRead 返回 0, 不应视为检测失败)
         const size_t runLen = utils.popenRead("pidof Littleyouran", buf, sizeof(buf) - 1);
         if (runLen > 0) {
             buf[runLen] = 0;
