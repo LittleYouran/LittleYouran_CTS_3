@@ -73,16 +73,25 @@ public:
 
         std::vector<std::string> packages;
         if (!packageSource_.load(packages, utils_, logger_)) return false;
-        packages_.clear();
-        packages_.insert(packages.begin(), packages.end());
-        return !packages_.empty();
+        rebuild(std::move(packages));
+        return !storage_.empty();
+    }
+
+    void rebuild(std::vector<std::string>&& packages) {
+        storage_ = std::move(packages);
+        names_.clear();
+        names_.reserve(storage_.size());
+        for (const std::string& pkg : storage_) {
+            names_.emplace(pkg);
+        }
     }
 
     bool supports(const std::string& processName) const {
-        if (packages_.find(processName) != packages_.end()) return true;
-        const size_t suffix = processName.find(':');
-        return suffix != std::string::npos &&
-               packages_.find(processName.substr(0, suffix)) != packages_.end();
+        const std::string_view pkg(processName);
+        const size_t suffix = pkg.find(':');
+        const std::string_view base =
+            suffix == std::string_view::npos ? pkg : pkg.substr(0, suffix);
+        return names_.count(base) != 0;
     }
 
     bool available() const { return !governor_.empty(); }
@@ -106,7 +115,7 @@ public:
     }
 
     std::vector<std::string> packages() const {
-        return std::vector<std::string>(packages_.begin(), packages_.end());
+        return storage_;
     }
 
 private:
@@ -116,7 +125,8 @@ private:
     Utils utils_;
     Logger logger_;
     OplusPackages packageSource_;
-    std::unordered_set<std::string> packages_;
+    std::vector<std::string> storage_;
+    std::unordered_set<std::string_view> names_;
     std::string governor_;
     bool active_ = false;
 
