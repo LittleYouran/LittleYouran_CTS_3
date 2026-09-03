@@ -482,6 +482,7 @@ public:
     }
 
     void Init() {
+        utils.Init();
         char buf[256] = { 0 };
         if (anotherInstanceRunning()) {
         const size_t runLen = utils.popenRead("pidof Littleyouran", buf, sizeof(buf) - 1);

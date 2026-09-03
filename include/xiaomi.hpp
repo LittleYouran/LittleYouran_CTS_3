@@ -4,14 +4,15 @@
 #include "Logger.hpp"
 #include "Utils.hpp"
 
-#include <cstddef>
 #include <string>
+#include <string_view>
 #include <unistd.h>
+#include <unordered_set>
 #include <vector>
 
 class XiaomiFeas {
 public:
-    static constexpr const char* kFeasGames[] = {
+    static inline const std::unordered_set<std::string_view> kFeasGames = {
         "com.tencent.tmgp.cf",
         "com.tencent.jkchess",
         "com.miHoYo.Yuanshen",
@@ -21,7 +22,6 @@ public:
         "com.tencent.tmgp.sgamece",
         "com.tencent.tmgp.pubgmhd",
     };
-    static constexpr size_t kFeasGameCount = sizeof(kFeasGames) / sizeof(kFeasGames[0]);
 
     bool Init() {
         feasPath_ = nullptr;
@@ -31,13 +31,11 @@ public:
     }
 
     bool supports(const std::string& processName) const {
-        const size_t suffix = processName.find(':');
-        const std::string base =
-            suffix == std::string::npos ? processName : processName.substr(0, suffix);
-        for (size_t i = 0; i < kFeasGameCount; ++i) {
-            if (base == kFeasGames[i]) return true;
-        }
-        return false;
+        const std::string_view pkg(processName);
+        const size_t suffix = pkg.find(':');
+        const std::string_view base =
+            suffix == std::string_view::npos ? pkg : pkg.substr(0, suffix);
+        return kFeasGames.count(base) != 0;
     }
 
     void setActive(bool enable) {
@@ -52,8 +50,8 @@ public:
     std::vector<std::string> packages() const {
         std::vector<std::string> out;
         if (feasPath_ == nullptr) return out;
-        out.reserve(kFeasGameCount);
-        for (size_t i = 0; i < kFeasGameCount; ++i) out.emplace_back(kFeasGames[i]);
+        out.reserve(kFeasGames.size());
+        for (std::string_view game : kFeasGames) out.emplace_back(game);
         return out;
     }
 

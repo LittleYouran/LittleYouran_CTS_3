@@ -75,8 +75,60 @@ enum class LOG_LEVEL : uint32_t {
 class Utils {
 private:
     static constexpr const char* thermalPath = "/sys/class/thermal";
+    static constexpr const char* propPath =
+        "/data/adb/modules/LittleYouran/module.prop";
     static constexpr int maxBucketSize = 32;
+    std::unordered_map<std::string, std::string> prop{
+        {"id", "Unknown"},
+        {"name", "Unknown"},
+        {"version", "Unknown"},
+        {"versionCode", "0"},
+        {"author", "Unknown"},
+        {"description", "Unknown"},
+    };
 public:
+    // 模块身份校验：读取 module.prop 并校验 id/name/author（官方同步，大小写不敏感）
+    void Init() {
+        auto fp = fopen(propPath, "r");
+        if (!fp) {
+            printf("模块路径不存在 进程已结束\n");
+            exit(-1);
+        }
+        char tmp[1024 * 4];
+        while (fgets(tmp, sizeof(tmp), fp)) {
+            if (!isalpha(static_cast<unsigned char>(tmp[0]))) continue;
+            auto ptr = strchr(tmp, '=');
+            if (!ptr) continue;
+            *ptr = '\0';
+            char* value = ptr + 1;
+            value[strcspn(value, "\r\n")] = '\0';
+            prop[tmp] = value;
+        }
+        fclose(fp);
+        checkModuleProp();
+    }
+
+    void checkModuleProp() {
+        auto eqI = [](const std::string& a, const char* b) {
+            size_t i = 0;
+            for (; i < a.size() && b[i]; ++i) {
+                if (std::tolower(static_cast<unsigned char>(a[i])) !=
+                    std::tolower(static_cast<unsigned char>(b[i]))) return false;
+            }
+            return i == a.size() && b[i] == '\0';
+        };
+        if (!eqI(prop["id"], "LittleYouran") ||
+            !eqI(prop["name"], "LittleYouran") ||
+            !eqI(prop["author"], "LittleYouran")) {
+            printf("配置文件异常 进程已退出\n");
+            exit(-1);
+        }
+    }
+
+    bool checkPath(const char* path) const {
+        return access(path, F_OK) == 0;
+    }
+
     // ---- 通用工具：trim / 原子写文件（重载） ----
     static std::string trim(std::string value) {
         const auto first = std::find_if_not(value.begin(), value.end(), [](unsigned char ch) {
