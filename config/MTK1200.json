@@ -23,15 +23,12 @@
         "LaunchBoost": {
             "enable": false,
             "boost_rate_limit_ms": 48,
-            "BoostFreq": {
-                "c0": "1250000",
-                "c1": "1537000",
-                "c2": "1998000",
-                "c3": ""
-            }
-        },
-        "OfficialMode": {
-            "enable": false
+          "BoostFreq": {
+            "c0": "1450000",
+            "c1": "1740000",
+            "c2": "2141000",
+            "c3": ""
+          }
         },
         "DisableGpuBoost": {
             "enable": true

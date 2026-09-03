@@ -1,6 +1,6 @@
 {
     "meta":{
-        "name": "MTK9400e",
+        "name": "天玑 9300+",
         "version": 1,
         "author": "LittleYouran",
         "loglevel": "INFO"
@@ -11,11 +11,11 @@
         "c2": 7,
         "c3": -1
     },
-        "Function": {
+    "Function": {
         "Cpuset": {
             "enable": true,
             "top_app": "0-7",
-            "foreground": "0-7",
+            "foreground": "0-6",
             "restricted": "0-3",
             "system_background": "0-3",
             "background": "0-2"
@@ -23,23 +23,26 @@
         "LaunchBoost": {
             "enable": false,
             "boost_rate_limit_ms": 48,
-            "BoostFreq": {
-                "c0": "1500000",
-                "c1": "1800000",
-                "c2": "2100000",
-                "c3": ""
-            }
+          "BoostFreq": {
+            "c0": "1500000",
+            "c1": "2000000",
+            "c2": "2500000",
+            "c3": ""
+          }
+        },
+        "Feas": {
+            "enable": false
         },
         "DisableGpuBoost": {
             "enable": false
         },
         "Scheduler": {
             "enable": true,
-            "sched_latency_ns": "0",
-            "sched_migration_cost_ns": "0",
-            "sched_min_granularity_ns": "0",
-            "sched_wakeup_granularity_ns": "0",
-            "sched_nr_migrate": "0",
+            "sched_latency_ns": "12000000",
+            "sched_migration_cost_ns": "500000",
+            "sched_min_granularity_ns": "2500000",
+            "sched_wakeup_granularity_ns": "2000000",
+            "sched_nr_migrate": "32",
             "sched_util_clamp_min": "0",
             "sched_util_clamp_max": "1024",
             "sched_energy_aware": true,
@@ -54,12 +57,12 @@
                 "c2": "0",
                 "c3": ""
             },
-            "MaxFreq":{
-                "c0": "1700000",
-                "c1": "1900000",
-                "c2": "2100000",
-                "c3": ""
-            },
+          "MaxFreq": {
+            "c0": "1600000",
+            "c1": "2000000",
+            "c2": "2200000",
+            "c3": ""
+          },
             "governor":{
                 "c0": "schedutil",
                 "c1": "schedutil",
@@ -190,12 +193,12 @@
                 "c2": "0",
                 "c3": ""
             },
-            "MaxFreq":{
-                "c0": "1800000",
-                "c1": "2200000",
-                "c2": "2500000",
-                "c3": ""
-            },
+          "MaxFreq": {
+            "c0": "1800000",
+            "c1": "2300000",
+            "c2": "2600000",
+            "c3": ""
+          },
             "governor":{
                 "c0": "schedutil",
                 "c1": "schedutil",
@@ -327,8 +330,8 @@
                 "c3": ""
             },
             "MaxFreq":{
-                "c0": "1900000",
-                "c1": "2600000",
+                "c0": "1800000",
+                "c1": "2700000",
                 "c2": "3000000",
                 "c3": ""
             },
@@ -464,8 +467,8 @@
             },
             "MaxFreq":{
                 "c0": "2000000",
-                "c1": "2850000",
-                "c2": "3730000",
+                "c1": "3000000",
+                "c2": "3400000",
                 "c3": ""
             },
             "governor":{

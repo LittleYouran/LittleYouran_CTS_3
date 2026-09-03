@@ -1,21 +1,21 @@
 {
     "meta":{
-        "name": "MTK9400e",
+        "name": "Helio G99",
         "version": 1,
         "author": "LittleYouran",
         "loglevel": "INFO"
     },
     "Policy":{
         "c0": 0,
-        "c1": 4,
-        "c2": 7,
+        "c1": 6,
+        "c2": -1,
         "c3": -1
     },
-        "Function": {
+    "Function": {
         "Cpuset": {
             "enable": true,
             "top_app": "0-7",
-            "foreground": "0-7",
+            "foreground": "0-6",
             "restricted": "0-3",
             "system_background": "0-3",
             "background": "0-2"
@@ -25,21 +25,21 @@
             "boost_rate_limit_ms": 48,
             "BoostFreq": {
                 "c0": "1500000",
-                "c1": "1800000",
-                "c2": "2100000",
+                "c1": "1993000",
+                "c2": "",
                 "c3": ""
             }
         },
         "DisableGpuBoost": {
-            "enable": false
+            "enable": true
         },
         "Scheduler": {
             "enable": true,
-            "sched_latency_ns": "0",
-            "sched_migration_cost_ns": "0",
-            "sched_min_granularity_ns": "0",
-            "sched_wakeup_granularity_ns": "0",
-            "sched_nr_migrate": "0",
+            "sched_latency_ns": "16000000",
+            "sched_migration_cost_ns": "200000",
+            "sched_min_granularity_ns": "4000000",
+            "sched_wakeup_granularity_ns": "2000000",
+            "sched_nr_migrate": "27",
             "sched_util_clamp_min": "0",
             "sched_util_clamp_max": "1024",
             "sched_energy_aware": true,
@@ -51,19 +51,19 @@
             "MinFreq":{
                 "c0": "0",
                 "c1": "0",
-                "c2": "0",
+                "c2": "",
                 "c3": ""
             },
             "MaxFreq":{
                 "c0": "1700000",
                 "c1": "1900000",
-                "c2": "2100000",
+                "c2": "",
                 "c3": ""
             },
             "governor":{
                 "c0": "schedutil",
                 "c1": "schedutil",
-                "c2": "schedutil",
+                "c2": "",
                 "c3": ""
             },
             "SchedParam":{
@@ -187,19 +187,19 @@
             "MinFreq":{
                 "c0": "0",
                 "c1": "0",
-                "c2": "0",
+                "c2": "",
                 "c3": ""
             },
             "MaxFreq":{
                 "c0": "1800000",
-                "c1": "2200000",
-                "c2": "2500000",
+                "c1": "2000000",
+                "c2": "",
                 "c3": ""
             },
             "governor":{
                 "c0": "schedutil",
                 "c1": "schedutil",
-                "c2": "schedutil",
+                "c2": "",
                 "c3": ""
             },
             "SchedParam":{
@@ -323,19 +323,19 @@
             "MinFreq":{
                 "c0": "0",
                 "c1": "0",
-                "c2": "0",
+                "c2": "",
                 "c3": ""
             },
             "MaxFreq":{
                 "c0": "1900000",
-                "c1": "2600000",
-                "c2": "3000000",
+                "c1": "2100000",
+                "c2": "",
                 "c3": ""
             },
             "governor":{
                 "c0": "schedutil",
                 "c1": "schedutil",
-                "c2": "schedutil",
+                "c2": "",
                 "c3": ""
             },
             "SchedParam":{
@@ -459,19 +459,19 @@
             "MinFreq":{
                 "c0": "0",
                 "c1": "0",
-                "c2": "0",
+                "c2": "",
                 "c3": ""
             },
             "MaxFreq":{
                 "c0": "2000000",
-                "c1": "2850000",
-                "c2": "3730000",
+                "c1": "2200000",
+                "c2": "",
                 "c3": ""
             },
             "governor":{
                 "c0": "schedutil",
                 "c1": "schedutil",
-                "c2": "schedutil",
+                "c2": "",
                 "c3": ""
             },
             "SchedParam":{

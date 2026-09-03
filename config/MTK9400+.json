@@ -23,15 +23,12 @@
         "LaunchBoost": {
             "enable": false,
             "boost_rate_limit_ms": 48,
-            "BoostFreq": {
-                "c0": "1500000",
-                "c1": "1800000",
-                "c2": "2100000",
-                "c3": ""
-            }
-        },
-        "OfficialMode": {
-            "enable": false
+          "BoostFreq": {
+            "c0": "1500000",
+            "c1": "2000000",
+            "c2": "2100000",
+            "c3": ""
+          }
         },
         "DisableGpuBoost": {
             "enable": false
@@ -57,12 +54,12 @@
                 "c2": "0",
                 "c3": ""
             },
-            "MaxFreq":{
-                "c0": "1700000",
-                "c1": "1800000",
-                "c2": "2000000",
-                "c3": ""
-            },
+          "MaxFreq": {
+            "c0": "1700000",
+            "c1": "2000000",
+            "c2": "2100000",
+            "c3": ""
+          },
             "governor":{
                 "c0": "schedutil",
                 "c1": "schedutil",

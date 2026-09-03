@@ -30,9 +30,6 @@
                 "c3": ""
             }
         },
-        "OfficialMode": {
-            "enable": false
-        },
         "DisableGpuBoost": {
             "enable": false
         },
@@ -474,7 +471,7 @@
             "governor":{
                 "c0": "schedutil",
                 "c1": "schedutil",
-                "c2": "schedutill",
+                "c2": "schedutil",
                 "c3": ""
             },
             "SchedParam":{

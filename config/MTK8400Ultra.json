@@ -30,9 +30,6 @@
                 "c3": ""
             }
         },
-        "OfficialMode": {
-            "enable": false
-        },
         "DisableGpuBoost": {
             "enable": false
         },

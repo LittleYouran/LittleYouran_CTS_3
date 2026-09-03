@@ -23,15 +23,12 @@
         "LaunchBoost": {
             "enable": false,
             "boost_rate_limit_ms": 30,
-            "BoostFreq": {
-                "c0": "1900800",
-                "c1": "2112000",
-                "c2": "",
-                "c3": ""
-            }
-        },
-        "OfficialMode": {
-            "enable": false
+          "BoostFreq": {
+            "c0": "1996800",
+            "c1": "2880000",
+            "c2": "",
+            "c3": ""
+          }
         },
         "DisableGpuBoost": {
             "enable": false
@@ -57,12 +54,12 @@
                 "c2": "",
                 "c3": ""
             },
-            "MaxFreq":{
-                "c0": "1900800",
-                "c1": "2112000",
-                "c2": "",
-                "c3": ""
-            },
+          "MaxFreq": {
+            "c0": "2112000",
+            "c1": "2438400",
+            "c2": "",
+            "c3": ""
+          },
             "governor":{
                 "c0": "schedutil",
                 "c1": "schedutil",
@@ -193,12 +190,12 @@
                 "c2": "",
                 "c3": ""
             },
-            "MaxFreq":{
-                "c0": "2265600",
-                "c1": "2476800",
-                "c2": "",
-                "c3": ""
-            },
+          "MaxFreq": {
+            "c0": "2496000",
+            "c1": "2668800",
+            "c2": "",
+            "c3": ""
+          },
             "governor":{
                 "c0": "walt",
                 "c1": "walt",
@@ -206,58 +203,58 @@
                 "c3": ""
             },
             "SchedParam":{
-                "c0":{
-                    "Path1": "adaptive_high_freq",
-                    "value1": "0",
-                    "Path2": "adaptive_low_freq",
-                    "value2": "0",
-                    "Path3": "boost",
-                    "value3": "0",
-                    "Path4": "down_rate_limit_us",
-                    "value4": "12000",
-                    "Path5": "hispeed_freq",
-                    "value5": "1036800",
-                    "Path6": "hispeed_load",
-                    "value6": "90",
-                    "Path7": "pl",
-                    "value7": "1",
-                    "Path8": "rtg_boost_freq",
-                    "value8": "0",
-                    "Path9": "target_load_shift",
-                    "value9": "2",
-                    "Path10": "target_load_thresh",
-                    "value10": "1024",
-                    "Path11": "target_loads",
-                    "value11": "-3 1497600:-13",
-                    "Path12": "up_rate_limit_us",
-                    "value12": "2000"
-                },
-                "c1":{
-                    "Path1": "adaptive_high_freq",
-                    "value1": "0",
-                    "Path2": "adaptive_low_freq",
-                    "value2": "0",
-                    "Path3": "boost",
-                    "value3": "0",
-                    "Path4": "down_rate_limit_us",
-                    "value4": "20000",
-                    "Path5": "hispeed_freq",
-                    "value5": "1152000",
-                    "Path6": "hispeed_load",
-                    "value6": "96",
-                    "Path7": "pl",
-                    "value7": "1",
-                    "Path8": "rtg_boost_freq",
-                    "value8": "0",
-                    "Path9": "target_load_shift",
-                    "value9": "2",
-                    "Path10": "target_load_thresh",
-                    "value10": "1024",
-                    "Path11": "target_loads",
-                    "value11": "-3 1497600:-6 1996800:-13",
-                    "Path12": "up_rate_limit_us",
-                    "value12": "3500"
-                },
+              "c0": {
+                "Path1": "adaptive_high_freq",
+                "value1": "0",
+                "Path2": "adaptive_low_freq",
+                "value2": "0",
+                "Path3": "boost",
+                "value3": "0",
+                "Path4": "down_rate_limit_us",
+                "value4": "12000",
+                "Path5": "hispeed_freq",
+                "value5": "1036800",
+                "Path6": "hispeed_load",
+                "value6": "90",
+                "Path7": "pl",
+                "value7": "1",
+                "Path8": "rtg_boost_freq",
+                "value8": "0",
+                "Path9": "target_load_shift",
+                "value9": "2",
+                "Path10": "target_load_thresh",
+                "value10": "1024",
+                "Path11": "target_loads",
+                "value11": "-3 1785600:-13",
+                "Path12": "up_rate_limit_us",
+                "value12": "2000"
+              },
+              "c1": {
+                "Path1": "adaptive_high_freq",
+                "value1": "0",
+                "Path2": "adaptive_low_freq",
+                "value2": "0",
+                "Path3": "boost",
+                "value3": "0",
+                "Path4": "down_rate_limit_us",
+                "value4": "20000",
+                "Path5": "hispeed_freq",
+                "value5": "1152000",
+                "Path6": "hispeed_load",
+                "value6": "96",
+                "Path7": "pl",
+                "value7": "1",
+                "Path8": "rtg_boost_freq",
+                "value8": "0",
+                "Path9": "target_load_shift",
+                "value9": "2",
+                "Path10": "target_load_thresh",
+                "value10": "1024",
+                "Path11": "target_loads",
+                "value11": "-3 1747200:-6 2227200:-13",
+                "Path12": "up_rate_limit_us",
+                "value12": "3500"
+              },
                 "c2":{
                     "Path1": "",
                     "value1": "",

@@ -1,6 +1,6 @@
 {
     "meta":{
-        "name": "骁龙 7g3+",
+        "name": "骁龙 8sgen3",
         "version": 1,
         "author": "LittleYouran",
         "loglevel": "INFO"
@@ -11,24 +11,24 @@
         "c2": 7,
         "c3": -1
     },
-    "Function": {
+   "Function": {
         "Cpuset": {
             "enable": true,
             "top_app": "0-7",
             "foreground": "0-6",
-            "restricted": "0-3",
-            "system_background": "0-3",
-            "background": "0-2"
+            "restricted": "0-2",
+            "system_background": "0-2",
+            "background": "0-1"
         },
         "LaunchBoost": {
             "enable": false,
             "boost_rate_limit_ms": 48,
-          "BoostFreq": {
-            "c0": "1228800",
-            "c1": "1708800",
-            "c2": "1766400",
-            "c3": ""
-          }
+            "BoostFreq": {
+                "c0": "1593600",
+                "c1": "1824000",
+                "c2": "1900800",
+                "c3": ""
+            }
         },
         "DisableGpuBoost": {
             "enable": true
@@ -55,9 +55,9 @@
                 "c3": ""
             },
             "MaxFreq":{
-                "c0": "1497600",
-                "c1": "1708800",
-                "c2": "1900800",
+                "c0": "1708800",
+                "c1": "1920000",
+                "c2": "2150400",
                 "c3": ""
             },
             "governor":{
@@ -191,9 +191,9 @@
                 "c3": ""
             },
             "MaxFreq":{
-                "c0": "1593600",
-                "c1": "1920000",
-                "c2": "2304000",
+                "c0": "1843200",
+                "c1": "2073600",
+                "c2": "2150400",
                 "c3": ""
             },
             "governor":{
@@ -202,7 +202,7 @@
                 "c2": "walt",
                 "c3": ""
             },
-            "SchedParam":{
+          "SchedParam":{
                 "c0":{
                     "Path1": "adaptive_high_freq",
                     "value1": "0",
@@ -211,11 +211,11 @@
                     "Path3": "boost",
                     "value3": "0",
                     "Path4": "down_rate_limit_us",
-                    "value4": "0",
+                    "value4": "8000",
                     "Path5": "hispeed_freq",
                     "value5": "902400",
                     "Path6": "hispeed_load",
-                    "value6": "94",
+                    "value6": "92",
                     "Path7": "pl",
                     "value7": "1",
                     "Path8": "rtg_boost_freq",
@@ -225,7 +225,7 @@
                     "Path10": "target_load_thresh",
                     "value10": "1024",
                     "Path11": "target_loads",
-                    "value11": "-3 1344000:-13",
+                    "value11": "-3 1478400:-13",
                     "Path12": "up_rate_limit_us",
                     "value12": "2000"
                 },
@@ -237,11 +237,11 @@
                     "Path3": "boost",
                     "value3": "0",
                     "Path4": "down_rate_limit_us",
-                    "value4": "0",
+                    "value4": "12000",
                     "Path5": "hispeed_freq",
-                    "value5": "1190400",
+                    "value5": "940800",
                     "Path6": "hispeed_load",
-                    "value6": "92",
+                    "value6": "94",
                     "Path7": "pl",
                     "value7": "1",
                     "Path8": "rtg_boost_freq",
@@ -253,7 +253,7 @@
                     "Path11": "target_loads",
                     "value11": "-3 1401600:-6 1708800:-13",
                     "Path12": "up_rate_limit_us",
-                    "value12": "2000"
+                    "value12": "3000"
                 },
                 "c2":{
                     "Path1": "adaptive_high_freq",
@@ -263,11 +263,11 @@
                     "Path3": "boost",
                     "value3": "0",
                     "Path4": "down_rate_limit_us",
-                    "value4": "0",
+                    "value4": "20000",
                     "Path5": "hispeed_freq",
-                    "value5": "1209600",
+                    "value5": "960000",
                     "Path6": "hispeed_load",
-                    "value6": "92",
+                    "value6": "96",
                     "Path7": "pl",
                     "value7": "1",
                     "Path8": "rtg_boost_freq",
@@ -277,9 +277,9 @@
                     "Path10": "target_load_thresh",
                     "value10": "1024",
                     "Path11": "target_loads",
-                    "value11": "-3 1459200:-6 1900800:-13",
+                    "value11": "-3 1324800:-6 1766400:-13",
                     "Path12": "up_rate_limit_us",
-                    "value12": "2000"
+                    "value12": "4000"
                 },
                 "c3":{
                     "Path1": "",
@@ -327,9 +327,9 @@
                 "c3": ""
             },
             "MaxFreq":{
-                "c0": "1708800",
-                "c1": "2073600",
-                "c2": "2496000",
+                "c0": "1900800",
+                "c1": "2611200",
+                "c2": "2803200",
                 "c3": ""
             },
             "governor":{
@@ -463,9 +463,9 @@
                 "c3": ""
             },
             "MaxFreq":{
-                "c0": "1804800",
-                "c1": "2400000",
-                "c2": "2707200",
+                "c0": "2016000",
+                "c1": "2707200",
+                "c2": "2918400",
                 "c3": ""
             },
             "governor":{

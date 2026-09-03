@@ -30,9 +30,6 @@
                 "c3": ""
             }
         },
-        "OfficialMode": {
-            "enable": false
-        },
         "DisableGpuBoost": {
             "enable": true
         },
@@ -57,12 +54,12 @@
                 "c2": "0",
                 "c3": ""
             },
-            "MaxFreq":{
-                "c0": "1593600",
-                "c1": "1824000",
-                "c2": "1766400",
-                "c3": ""
-            },
+          "MaxFreq": {
+            "c0": "1593600",
+            "c1": "1824000",
+            "c2": "1900800",
+            "c3": ""
+          },
             "governor":{
                 "c0": "schedutil",
                 "c1": "schedutil",
