@@ -7,8 +7,6 @@
 #include <poll.h>
 #include <errno.h>
 
-// 风驰: 游戏识别与极速模式切换
-// 来源  /data/adb/modules/RemoteConfigOverride/json/ 文件名
 class OnePlus {
 private:
     static constexpr const char* topAppProcs = "/dev/cpuset/top-app/cgroup.procs";
@@ -36,9 +34,8 @@ private:
     std::string defaultMode;
     bool mkdirDone = false;
     bool horaeActive = false;
-    std::function<void(int)> boostCb;   // 前台切换回调 (pid>0=eBPF事件, 0=inotify事件), Schedule 注册
+    std::function<void(int)> boostCb;
 
-    // 从 MD 读取: 数据库不可用时的包名兜底来源
     void loadPackagesFromMd() {
         gamePackages.clear();
 
@@ -62,7 +59,6 @@ private:
         }
     }
 
-    // 包名自动获取: sqlite3 查数据库(只读) → 过滤系统组件 → 写 MD
     void loadPackages() {
         const char* db = nullptr;
         if (access(dbPath1, F_OK) == 0) db = dbPath1;
@@ -75,7 +71,6 @@ private:
 
         gamePackages.clear();
 
-        // 执行: sqlite3 <db> "SELECT package_name FROM PackageConfigBean;"
         FastSnprintf(temp, sizeof(temp),
                      "%s %s \"SELECT package_name FROM PackageConfigBean;\"",
                      sqlitePath, db);
@@ -86,7 +81,6 @@ private:
         } else {
             out[len] = '\0';
 
-            // 逐行解析 过滤系统组件 (com.oplus.* / oplus.cosa.*)
             char* p = out;
             char* end = out + len;
             while (p < end) {
@@ -127,8 +121,6 @@ private:
         }
     }
 
-    // 检测顺序: hmbird → scx (仅用于风驰频率不限制)
-    // 均未检测到时返回 nullptr: 进入风驰按配置文件走
     const char* detectGovernor() {
         char buf[512] = { 0 };
         const int fd = open(availGovPath, O_RDONLY);
@@ -149,7 +141,7 @@ private:
         return nullptr;
     }
 
-    // 检测 hmbird/scx 调速器是否可用 (无则风驰不可用)
+    // 检测 hmbird/scx 调速器是否可用
     bool checkOfficialGovAvailable() {
         char buf[512] = { 0 };
         const int fd = open(availGovPath, O_RDONLY);
@@ -163,12 +155,6 @@ private:
         return (strstr(buf, "hmbird") != nullptr || strstr(buf, "scx") != nullptr);
     }
 
-    // 前台检测: 游戏进程处于 top-app/foreground cpuset 时判定活跃 (纯文件读取)
-    // 小窗/悬浮窗不移动游戏进程 → 游戏全屏时无论焦点在哪都保持活跃, 不蹦迪
-    // (修复1: 精确匹配主进程, 避免游戏服务进程误触发风驰)
-    // (修复2: Android 会把进程放入 top-app/g-others 等子 cgroup, 需检查 cgroup 路径前缀)
-    // 场景: 2.1 游戏全屏→top-app 活跃 / 2.2 游戏全屏+他窗小窗→游戏仍在 top-app 活跃
-    //       2.3 他窗全屏+游戏小窗→游戏移出 top-app 不活跃 / 2.4 游戏后台→不在 top-app 不活跃
     bool pidInGameCgroup(int pid) {
         char cgPath[64];
         char cgbuf[512] = { 0 };
@@ -246,9 +232,8 @@ private:
         horaeActive = enable;
     }
 
-    // 切换逻辑 (最简约): 进入游戏切 fast, 退出恢复原模式
     void enterGame() {
-        if (!defaultMode.empty()) return;   // 已在游戏模式
+        if (!defaultMode.empty()) return;
 
         {
             std::lock_guard<std::mutex> lock(Config::applyMutex);
@@ -265,7 +250,6 @@ private:
             logger.Info("风驰: 切换为极速模式 (原模式: %s)", defaultMode.c_str());
         }
 
-        // 进入风驰: 关闭所有附加优化, 游戏满血运行
         Function function;
         function.CloseAllFunC();
 
@@ -273,7 +257,7 @@ private:
     }
 
     void exitGame() {
-        if (defaultMode.empty()) return;    // 非游戏模式
+        if (defaultMode.empty()) return;
 
         const std::string restoreMode = defaultMode;
         defaultMode.clear();
@@ -285,7 +269,6 @@ private:
             logger.Info("风驰: 恢复模式 %s", restoreMode.c_str());
         }
 
-        // 退出风驰: 重新应用附加优化
         Function function;
         function.AllFunC();
         logger.Info("退出风驰: 已恢复额外优化");
@@ -293,7 +276,6 @@ private:
         setHorae(false);
     }
 
-    // 前台事件过滤: pid 是否在 top-app/foreground cgroup (省去后台事件的无效处理)
     bool pidIsFg(int pid) {
         char cg[512] = { 0 };
         char path[64];
@@ -307,11 +289,10 @@ private:
 
         sleep(2);
 
-        // eBPF 事件源优先 (纯事件驱动, 空闲 0 CPU); 初始化失败回退 inotify
         Ebpf ebpf;
         if (ebpf.Init()) {
             while (true) {
-                const int ev = ebpf.WaitEvent();   // 阻塞等待内核事件
+                const int ev = ebpf.WaitEvent();
                 if (ev == -1) {
                     logger.Info("风驰: 检测到 MD 文件变化 重新获取包名");
                     loadPackages();
@@ -319,12 +300,10 @@ private:
                     if (gamePackages.empty()) continue;
                 }
 
-                // 仅前台相关事件触发 LaunchBoost (后台事件跳过, 省 CPU)
                 if (boostCb && (ev <= 0 || pidIsFg(ev))) boostCb(ev);
 
-                utils.sleep_ms(300);   // 防抖
+                utils.sleep_ms(300);
 
-                // isGameActive 每次事件都检查: 即使漏一次事件, 下次事件也能修正状态, 防频率锁定
                 if (isGameActive()) {
                     enterGame();
                 } else {
@@ -334,7 +313,6 @@ private:
             return;
         }
 
-        // 回退: inotify 事件源
         logger.Info("风驰: 回退 inotify 事件源");
 
         const int fd = inotify_init();
@@ -356,7 +334,6 @@ private:
 
         char buf[8192];
         while (true) {
-            // 纯事件驱动: 阻塞等待 inotify 事件 (空闲 0 CPU)
             const ssize_t len = read(fd, buf, sizeof(buf));
             if (len <= 0) continue;
 
@@ -376,9 +353,9 @@ private:
                 if (gamePackages.empty()) continue;
             }
 
-            if (boostCb) boostCb(0);   // inotify 前台事件 → LaunchBoost (0 = 前台相关事件)
+            if (boostCb) boostCb(0);
 
-            utils.sleep_ms(300);   // 防抖
+            utils.sleep_ms(300);
 
             if (isGameActive()) {
                 enterGame();
@@ -401,8 +378,8 @@ public:
         }
         logger.Info("HMBird/SCX detected. 风驰可用");
 
-        loadPackagesFromMd();   // 先读 MD 兜底
-        loadPackages();         // 数据库刷新并写 MD
+        loadPackagesFromMd();
+        loadPackages();
         logger.Info("风驰: 游戏包名就绪 (%u 个)", static_cast<unsigned>(gamePackages.size()));
     }
 
@@ -410,7 +387,6 @@ public:
         std::thread(&OnePlus::monitorTask, this).detach();
     }
 
-    // 前台切换回调 (Schedule 注册 LaunchBoost 逻辑)
     void setBoostCallback(std::function<void(int)> cb) {
         boostCb = std::move(cb);
     }
