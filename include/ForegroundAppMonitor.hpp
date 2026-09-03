@@ -12,7 +12,6 @@
 class ForegroundAppMonitor {
 public:
     using Callback = std::function<void(const std::string&)>;
-    // 判定“受关注应用”（例如配置了单独模式的游戏）：主屏是它时，小窗/浮层变化不切换模式
     using TrackedFn = std::function<bool(const std::string&)>;
 
     void start(Callback callback, TrackedFn tracked = {}) {
@@ -33,7 +32,7 @@ private:
     static constexpr const char* topAppDirectory =
         "/dev/cpuset/top-app";
 
-    // 小窗/系统浮层等服务永远不应作为“前台主应用”参与模式判定
+    // 小窗
     static bool isIgnoredShell(const std::string& process) {
         static constexpr const char* kIgnoredPrefixes[] = {
             "com.coloros.assistantscreen",
@@ -155,16 +154,12 @@ private:
             current = currentPackage_;
         }
 
-        // 主屏仍是“受关注应用”（例如游戏）时：小窗/浮层进进出出不切换模式，
-        // 直到它真正离开 top-app（游戏退出）。
         if (!current.empty() && packagePresent(newPids, current) &&
             trackedFn_ && trackedFn_(current)) {
             topAppPids_ = newPids;
             return;
         }
 
-        // cgroup transitions commonly emit an empty or removal-only snapshot.
-        // Keep the current app until a genuinely new foreground process appears.
         if (added.empty() && !current.empty() && packagePresent(newPids, current)) {
             topAppPids_ = newPids;
             return;
