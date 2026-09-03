@@ -1,11 +1,5 @@
 #pragma once
 
-// ============================================================
-// OPPO / OnePlus 风驰适配（完整）
-//   OplusPackages —— 从 ColorOS 游戏数据库读取包名
-//   OnePlus       —— 风驰引擎：调速器探测、horae 开关、包匹配
-// ============================================================
-
 #include "PackageDb.hpp"
 #include "Logger.hpp"
 #include "Utils.hpp"
