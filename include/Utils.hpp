@@ -2,6 +2,7 @@
 
 #include <iostream>
 #include <fstream>
+#include <cctype>
 #include <cstring>
 #include <thread>
 #include <string>
@@ -21,9 +22,12 @@
 #include <cstdio>
 #include <sys/inotify.h>
 #include <sys/mount.h>
+#include <sys/wait.h>
 #include <sys/prctl.h>
+#include <algorithm>
 #include <string_view>
 #include <unordered_map>
+#include <unordered_set>
 #include <functional>
 #include <sys/system_properties.h>
 #include <mutex>
@@ -73,36 +77,84 @@ private:
     static constexpr const char* thermalPath = "/sys/class/thermal";
     static constexpr int maxBucketSize = 32;
 public:
-    void FileWrite(const char* filePath, const char* content) noexcept {
-        int fd = open(filePath, O_WRONLY | O_NONBLOCK, 0666);
-
-        if (fd < 0) {
-            chmod(filePath, 0666);
-            fd = open(filePath, O_WRONLY | O_CREAT | O_NONBLOCK); 
-        }
-
-        if (fd >= 0) {
-            write(fd, content, Faststrlen(content));
-            close(fd);
-            chmod(filePath, 0444);
-        }
+    // ---- 通用工具：trim / 原子写文件（重载） ----
+    static std::string trim(std::string value) {
+        const auto first = std::find_if_not(value.begin(), value.end(), [](unsigned char ch) {
+            return std::isspace(ch) != 0;
+        });
+        const auto last = std::find_if_not(value.rbegin(), value.rend(), [](unsigned char ch) {
+            return std::isspace(ch) != 0;
+        }).base();
+        return first < last ? std::string(first, last) : std::string();
     }
 
-    // 错误感知写入: 关键路径(频率/调速器/解除限制)用, 失败返回 false 便于调用方记录
-    bool FileWriteChecked(const char* filePath, const char* content) noexcept {
-        int fd = open(filePath, O_WRONLY | O_NONBLOCK, 0666);
-        if (fd < 0) {
-            chmod(filePath, 0666);
-            fd = open(filePath, O_WRONLY | O_CREAT | O_NONBLOCK);
-        }
+    // 原子写文件核心：临时文件 + fsync + rename
+    static bool writeFileAtomic(const char* path, const std::string& content,
+                                const struct stat* preserve,
+                                const char* tmpSuffix, mode_t mode) {
+        const std::string temporary = std::string(path) + tmpSuffix;
+        const int fd = open(temporary.c_str(), O_WRONLY | O_CREAT | O_TRUNC,
+                            preserve ? static_cast<mode_t>(preserve->st_mode & 07777) : mode);
         if (fd < 0) return false;
 
-        const size_t len = Faststrlen(content);
-        bool ok = (write(fd, content, len) == (ssize_t)len);
+        size_t offset = 0;
+        while (offset < content.size()) {
+            const ssize_t written = write(fd, content.data() + offset, content.size() - offset);
+            if (written <= 0) {
+                close(fd);
+                unlink(temporary.c_str());
+                return false;
+            }
+            offset += static_cast<size_t>(written);
+        }
+        fsync(fd);
         close(fd);
-        return ok;
+
+        if (preserve) {
+            chmod(temporary.c_str(), preserve->st_mode & 07777);
+            chown(temporary.c_str(), preserve->st_uid, preserve->st_gid);
+        } else {
+            chmod(temporary.c_str(), mode);
+        }
+        if (rename(temporary.c_str(), path) != 0) {
+            unlink(temporary.c_str());
+            return false;
+        }
+        return true;
     }
-    
+
+    // 普通原子写（.tmp / 0664，无需保留属主）
+    static bool writeFileAtomic(const char* path, const std::string& content) {
+        return writeFileAtomic(path, content, nullptr, ".tmp", 0664);
+    }
+
+    // 保留原文件属主/mode（Scene SharedPreferences 需要），自定义临时后缀防与 Scene 自身写冲突
+    static bool writeFileAtomic(const char* path, const std::string& content,
+                                const struct stat* preserve,
+                                const char* tmpSuffix = ".littleyouran.tmp") {
+        return writeFileAtomic(path, content, preserve, tmpSuffix,
+                               preserve ? static_cast<mode_t>(preserve->st_mode & 07777) : 0664);
+    }
+
+    int readProperty(const char* name, char* value, const size_t maxLen) noexcept {
+        if (!value || maxLen == 0) return 0;
+        value[0] = 0;
+        char raw[PROP_VALUE_MAX] = { 0 };
+        const int len = __system_property_get(name, raw);
+        if (len <= 0) return 0;
+        const size_t copyLen = (static_cast<size_t>(len) < maxLen - 1) ? static_cast<size_t>(len) : maxLen - 1;
+        memcpy(value, raw, copyLen);
+        value[copyLen] = 0;
+        return static_cast<int>(copyLen);
+    }
+
+    void FileWrite(const char* filePath, const char* content) noexcept {
+        int fd = open(filePath, O_WRONLY | O_NONBLOCK, 0666);
+        if (fd < 0) return;
+        write(fd, content, Faststrlen(content));
+        close(fd);
+    }
+
     void FileWrite(const std::string& filePath, const std::string& content) noexcept {
         int fd = open(filePath.c_str(), O_WRONLY | O_NONBLOCK, 0666);
 
@@ -192,8 +244,8 @@ public:
     bool exec(const char* cmd) {
         auto fp = popen(cmd, "r");
         if (fp == nullptr) return false;
-        pclose(fp);
-        return true;
+        const int status = pclose(fp);
+        return WIFEXITED(status) && WEXITSTATUS(status) == 0;
     }
 
     int readInt(const char* path) noexcept {
@@ -216,6 +268,8 @@ public:
             chmod(path,0666);
             fd = open(path, O_WRONLY);
         }
+
+        if (fd < 0) return;
 
         char tmp[16];
         auto len = FastSnprintf(tmp, sizeof(tmp), "%d", value);
@@ -454,7 +508,7 @@ public:
     
     size_t readString(const char* path, char* buff, const size_t maxLen) {
         auto fd = open(path, O_RDONLY);
-        if (fd <= 0) {
+        if (fd < 0) {
             buff[0] = 0;
             return 0;
         }

@@ -5,7 +5,10 @@
 #include <string>
 #include <atomic>
 #include <mutex>
+#include <stdexcept>
 #include "Json/string.hpp"
+#include "Json/json.h"
+#include "Logger.hpp"
 
 using string_t = qlib::string_t;
 using bool_t = qlib::bool_t;
@@ -68,11 +71,7 @@ namespace Config {
         string_t Value[24];
     };
 
-    namespace GameMode {
-        std::atomic_bool active{false};
-    }
-
     // Serialize profile writes from the mode watcher, 风驰 watcher and
     // auxiliary optimization callbacks.
     inline std::mutex applyMutex;
-}; 
+};

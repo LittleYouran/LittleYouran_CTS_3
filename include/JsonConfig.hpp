@@ -43,7 +43,7 @@ public:
         return false;
     }
 
-    bool readConfig() {
+    bool readConfig(const std::string& selectedMode) {
         ifstream ifs(configPath, std::ios::binary);
         if (!ifs) {
             logger.Error("无法打开json配置文件");
@@ -56,6 +56,16 @@ public:
         if (result != 0) {
             logger.Error("解析json配置文件失败 错误: %d", result);
             return false; 
+        }
+
+        // Clear values from the previous profile before loading the new one.
+        // Profiles intentionally omit unused clusters/parameters; stale values
+        // must never leak into the next mode.
+        for (int i = 0; i < 4; ++i) {
+            Performances::MinFreq[i] = string_t();
+            Performances::MaxFreq[i] = string_t();
+            Performances::CpuGovernor[i] = string_t();
+            schedParam[i] = SchedParam{};
         }
 
         try {
@@ -157,7 +167,7 @@ public:
             logger.Error("Function节点异常 错误消息: %d", e.what());
         }
 
-        LoadConfig();
+        mode = selectedMode;
 
         if (mode.empty()) {
             logger.Error("情景模式为空 无法读取数据");
@@ -231,5 +241,10 @@ public:
         }
         
         return true;
+    }
+
+    bool readConfig() {
+        LoadConfig();
+        return readConfig(mode);
     }
 };

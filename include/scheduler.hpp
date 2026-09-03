@@ -1,80 +1,334 @@
 #pragma once
 
+#include <algorithm>
+#include <cerrno>
+#include <cctype>
+#include <cstdlib>
+#include <sstream>
+#include <condition_variable>
+
 #include "LibUtils.hpp"
 #include "Function.hpp"
+#include "app_modes.hpp"
+#include "ForegroundAppMonitor.hpp"
+#include "GamePackageFile.hpp"
 #include "WebSocket.hpp"
-#include "onePlus.hpp"
+#include "xiaomi.hpp"
+#include "oppo.hpp"
 
 class Schedule {
 private:
-    static constexpr const char* configPath = "/sdcard/Android/CTS/mode.txt";
     static constexpr const char* jsonPath = "/sdcard/Android/CTS/config.json";
     static constexpr const char* onlinePath = "/sys/devices/system/cpu/cpu%d/online";
     static constexpr const char* SchedParamPath = "/sys/devices/system/cpu/cpufreq/policy%d/%s/%s";
     static constexpr const char* GovernorPath = "/sys/devices/system/cpu/cpufreq/policy%d/scaling_governor";
     static constexpr const char* MinFreqPath = "/sys/devices/system/cpu/cpufreq/policy%d/scaling_min_freq";
     static constexpr const char* MaxFreqPath = "/sys/devices/system/cpu/cpufreq/policy%d/scaling_max_freq";
+    static constexpr const char* AvailableFreqPath = "/sys/devices/system/cpu/cpufreq/policy%d/scaling_available_frequencies";
+    static constexpr const char* CpuInfoMinFreqPath = "/sys/devices/system/cpu/cpufreq/policy%d/cpuinfo_min_freq";
+    static constexpr const char* CpuInfoMaxFreqPath = "/sys/devices/system/cpu/cpufreq/policy%d/cpuinfo_max_freq";
+    static constexpr const char* PpmPolicyStatusPath = "/proc/ppm/policy_status";
+    static constexpr const char* PpmUserMinFreqPath = "/proc/ppm/policy/userlimit_min_cpu_freq";
+    static constexpr const char* PpmUserMaxFreqPath = "/proc/ppm/policy/userlimit_max_cpu_freq";
+    static constexpr const char* PpmHardMinFreqPath = "/proc/ppm/policy/hard_userlimit_min_cpu_freq";
+    static constexpr const char* PpmHardMaxFreqPath = "/proc/ppm/policy/hard_userlimit_max_cpu_freq";
+    static constexpr int PpmUserLimitPolicyIndex = 8;
+    static constexpr int PpmHardLimitPolicyIndex = 7;
+    static constexpr int PpmPolicyEnabled = 1;
+    static constexpr int PpmPolicyDisabled = 0;
+    static constexpr int PpmUnlimitedFrequency = -1;
+    static constexpr size_t FrequencyBufferSize = 4096;
 
     std::vector<thread> threads;
 
     Function function;
-    OnePlus oneoppo;
+    AppModeService appModes;
+    ForegroundAppMonitor foregroundMonitor;
+    OnePlus onePlus;
+    XiaomiFeas xiaomiFeas;
     WebSocketServer wsServer;
     JsonConfig conf;
     Logger logger;
     Utils utils;
 
-    bool cpuBoost = false;
+    std::string currentPackage;
+    std::string effectiveMode;
+    std::string lastReleasedMode;
+    std::string lastReportedPackage;
+    std::string lastReportedMode;
+    bool lastAppliedHadExplicitRule = false;
     
     char temp[256];
+
+    std::string readNode(const char* path) {
+        char value[FrequencyBufferSize] = { 0 };
+        const size_t length = utils.readString(path, value, sizeof(value) - 1);
+        if (length == 0) return {};
+
+        std::string result(value, length);
+        while (!result.empty() && std::isspace(static_cast<unsigned char>(result.back()))) {
+            result.pop_back();
+        }
+        return result;
+    }
+
+    bool modeFileIsFast() const {
+        return readModeFile() == "fast";
+    }
+
+    std::string readModeFile() const {
+        std::ifstream input(AppModeConfig::modePath);
+        std::string mode;
+        if (!input || !std::getline(input, mode)) return {};
+        while (!mode.empty() && std::isspace(static_cast<unsigned char>(mode.back()))) {
+            mode.pop_back();
+        }
+        return AppModeConfig::isSupportedMode(mode) ? mode : std::string();
+    }
+
+    std::vector<long long> availableFrequencies(const int policy) {
+        FastSnprintf(temp, sizeof(temp), AvailableFreqPath, policy);
+        const std::string raw = readNode(temp);
+        std::stringstream stream(raw);
+        std::vector<long long> frequencies;
+        long long frequency = 0;
+
+        while (stream >> frequency) {
+            if (frequency > 0) frequencies.push_back(frequency);
+        }
+
+        std::sort(frequencies.begin(), frequencies.end());
+        frequencies.erase(std::unique(frequencies.begin(), frequencies.end()), frequencies.end());
+        return frequencies;
+    }
+
+    bool parseFrequency(const std::string& text, long long& value) const {
+        if (text.empty()) return false;
+
+        char* end = nullptr;
+        errno = 0;
+        value = std::strtoll(text.c_str(), &end, 10);
+        return errno != ERANGE && end != text.c_str() && *end == '\0';
+    }
+
+    std::string normalizeMinFrequency(const int policy, const string_t& requested) {
+        const std::string requestedText = requested.c_str();
+        long long target = 0;
+        if (!parseFrequency(requestedText, target)) return requestedText;
+        if (target <= 0) return requestedText;
+
+        const std::vector<long long> frequencies = availableFrequencies(policy);
+        if (!frequencies.empty()) {
+            const auto lower = std::lower_bound(frequencies.begin(), frequencies.end(), target);
+            return std::to_string(lower == frequencies.end() ? frequencies.back() : *lower);
+        }
+
+        FastSnprintf(temp, sizeof(temp), CpuInfoMinFreqPath, policy);
+        const std::string hardwareMin = readNode(temp);
+        long long hardwareValue = 0;
+        if (parseFrequency(hardwareMin, hardwareValue) && hardwareValue > 0) {
+            return std::to_string(std::max(target, hardwareValue));
+        }
+        return requestedText;
+    }
+
+    std::string normalizeMaxFrequency(const int policy, const string_t& requested) {
+        const std::string requestedText = requested.c_str();
+        long long target = 0;
+        if (!parseFrequency(requestedText, target)) return requestedText;
+
+        const std::vector<long long> frequencies = availableFrequencies(policy);
+        if (frequencies.empty()) {
+            FastSnprintf(temp, sizeof(temp), CpuInfoMaxFreqPath, policy);
+            const std::string hardwareMax = readNode(temp);
+            long long hardwareValue = 0;
+            if (parseFrequency(hardwareMax, hardwareValue) && hardwareValue > 0) {
+                return std::to_string(std::min(target, hardwareValue));
+            }
+            return requestedText;
+        }
+
+        const auto upper = std::upper_bound(frequencies.begin(), frequencies.end(), target);
+        const long long effective = upper == frequencies.begin() ? frequencies.front() : *std::prev(upper);
+        return std::to_string(effective);
+    }
+
+    bool writeNode(const char* path, const std::string& value, const char* label) {
+        utils.FileWrite(path, value.c_str());
+        (void)label;
+        return true;
+    }
+
+    bool ppmUserLimitAvailable() const {
+        return access(PpmPolicyStatusPath, F_OK) == 0 &&
+               access(PpmUserMinFreqPath, F_OK) == 0 &&
+               access(PpmUserMaxFreqPath, F_OK) == 0;
+    }
+
+    bool ppmHardLimitAvailable() const {
+        return access(PpmHardMinFreqPath, F_OK) == 0 &&
+               access(PpmHardMaxFreqPath, F_OK) == 0;
+    }
+
+    bool writePpmValue(const char* path, const char* value) {
+        int fd = open(path, O_WRONLY | O_NONBLOCK);
+        if (fd < 0) return false;
+
+        const size_t length = Faststrlen(value);
+        const bool written = write(fd, value, length) == static_cast<ssize_t>(length);
+        close(fd);
+        return written;
+    }
+
+    bool writePpmCommand(const char* path, const int first, const std::string& second) {
+        char command[64];
+        FastSnprintf(command, sizeof(command), "%d %s", first, second.c_str());
+        return writePpmValue(path, command);
+    }
+
+    bool setPpmPolicy(const int policyIndex, const int state) {
+        char command[32];
+        FastSnprintf(command, sizeof(command), "%d %d", policyIndex, state);
+        return writePpmValue(PpmPolicyStatusPath, command);
+    }
+
+    bool setPpmUserLimitPolicy(const int state) {
+        return setPpmPolicy(PpmUserLimitPolicyIndex, state);
+    }
+
+    bool applyPpmFrequencyRange(const int cluster, const std::string& minFreq,
+                                const std::string& maxFreq) {
+        if (!ppmUserLimitAvailable()) return false;
+
+        struct stat statusStat{};
+        struct stat minStat{};
+        struct stat maxStat{};
+        struct stat hardMinStat{};
+        struct stat hardMaxStat{};
+        if (stat(PpmPolicyStatusPath, &statusStat) != 0 ||
+            stat(PpmUserMinFreqPath, &minStat) != 0 ||
+            stat(PpmUserMaxFreqPath, &maxStat) != 0) {
+            return false;
+        }
+
+        const bool hardAvailable = ppmHardLimitAvailable();
+        if (hardAvailable &&
+            (stat(PpmHardMinFreqPath, &hardMinStat) != 0 ||
+             stat(PpmHardMaxFreqPath, &hardMaxStat) != 0)) {
+            return false;
+        }
+
+        constexpr mode_t writableMode = S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP | S_IROTH | S_IWOTH;
+        const bool permissionsReady = chmod(PpmPolicyStatusPath, writableMode) == 0 &&
+            chmod(PpmUserMinFreqPath, writableMode) == 0 &&
+            chmod(PpmUserMaxFreqPath, writableMode) == 0 &&
+            (!hardAvailable ||
+             (chmod(PpmHardMinFreqPath, writableMode) == 0 &&
+              chmod(PpmHardMaxFreqPath, writableMode) == 0));
+
+        const std::string unlimited = std::to_string(PpmUnlimitedFrequency);
+        const bool hardApplied = !hardAvailable ||
+            (setPpmPolicy(PpmHardLimitPolicyIndex, PpmPolicyEnabled) &&
+             writePpmCommand(PpmHardMaxFreqPath, cluster, unlimited) &&
+             writePpmCommand(PpmHardMinFreqPath, cluster, minFreq) &&
+             writePpmCommand(PpmHardMaxFreqPath, cluster, maxFreq));
+        const bool applied = permissionsReady && hardApplied &&
+            setPpmUserLimitPolicy(PpmPolicyEnabled) &&
+            writePpmCommand(PpmUserMaxFreqPath, cluster, unlimited) &&
+            writePpmCommand(PpmUserMinFreqPath, cluster, minFreq) &&
+            writePpmCommand(PpmUserMaxFreqPath, cluster, maxFreq);
+
+        if (!applied) {
+            setPpmUserLimitPolicy(PpmPolicyDisabled);
+            if (hardAvailable) setPpmPolicy(PpmHardLimitPolicyIndex, PpmPolicyDisabled);
+            logger.Debug("PPM CPU簇 %d 频率范围写入失败，已回退 sysfs", cluster);
+        }
+
+        const bool permissionsRestored =
+            chmod(PpmPolicyStatusPath, statusStat.st_mode & 07777) == 0 &&
+            chmod(PpmUserMinFreqPath, minStat.st_mode & 07777) == 0 &&
+            chmod(PpmUserMaxFreqPath, maxStat.st_mode & 07777) == 0 &&
+            (!hardAvailable ||
+             (chmod(PpmHardMinFreqPath, hardMinStat.st_mode & 07777) == 0 &&
+              chmod(PpmHardMaxFreqPath, hardMaxStat.st_mode & 07777) == 0));
+        if (!permissionsRestored) {
+            logger.Debug("PPM 节点权限恢复失败");
+        }
+        return applied && permissionsRestored;
+    }
+
+    bool anotherInstanceRunning() {
+        char buffer[256] = { 0 };
+        const size_t length = utils.popenRead("pidof Littleyouran", buffer, sizeof(buffer) - 1);
+        if (length == 0) return false;
+        buffer[length] = '\0';
+
+        std::stringstream stream(buffer);
+        pid_t pid = 0;
+        while (stream >> pid) {
+            if (pid != getpid()) return true;
+        }
+        return false;
+    }
+
 public:
     Schedule& operator=(Schedule&&) = delete;
 
     Schedule() {
+        logger.clear_log();
         Init();
-        threads.emplace_back(thread(&Schedule::configTriggerTask, this));
         threads.emplace_back(thread(&Schedule::jsonTriggerTask, this));
-        // LaunchBoost 统一由风驰事件源驱动 (前台切换回调)
-        // pid>0 = eBPF 事件: 仅前台相关 cgroup (top-app/foreground) 才升频, 避免后台移动误触发
-        // pid=0 = inotify 事件: 本身就是 top-app/foreground 变化, 直接升频
-        oneoppo.setBoostCallback([this](int pid) {
-            if (!LaunchBoost::enable) return;
-            if (pid > 0) {
-                char cg[512] = { 0 };
-                char path[64];
-                FastSnprintf(path, sizeof(path), "/proc/%d/cgroup", pid);
-                utils.readString(path, cg, sizeof(cg) - 1);
-                if (!strstr(cg, "top-app") && !strstr(cg, "foreground")) return;
-            }
-            std::lock_guard<std::mutex> lock(Config::applyMutex);
-            cpuBoost = true;
-            release();
+        wsServer.Configure(&appModes,
+            [this]() { return getCurrentPackage(); },
+            [this]() { return getEffectiveMode(); });
+        appModes.start([this]() {
+            applyCurrentState(false, true);
+            wsServer.NotifyStateChanged();
         });
-        oneoppo.Start();
+        foregroundMonitor.start(
+            [this](const std::string& package) {
+                // top-app can be momentarily empty while Android moves tasks
+                // between cgroups. Keep the last app so vendor integrations do
+                // not flap during that transition.
+                if (package.empty()) return;
+                {
+                    std::lock_guard<std::mutex> stateLock(stateMutex);
+                    currentPackage = package;
+                }
+                applyCurrentState(true, false);
+                wsServer.NotifyStateChanged();
+            },
+            [this](const std::string& package) { return appModes.hasRule(package); });
         wsServer.Start();
     }
 
-    void FreqWriter(const int Policy, const string_t& MinFreq, const string_t& MaxFreq, const string_t& Governor) {
+    void FreqWriter(const int Policy, const int Cluster, const string_t& MinFreq,
+                    const string_t& MaxFreq, const string_t& Governor) {
+        const std::string effectiveMinFreq = normalizeMinFrequency(Policy, MinFreq);
+        const std::string effectiveMaxFreq = normalizeMaxFrequency(Policy, MaxFreq);
+        const bool ppmApplied = applyPpmFrequencyRange(Cluster, effectiveMinFreq, effectiveMaxFreq);
+
         FastSnprintf(temp, sizeof(temp), MinFreqPath, Policy);
-        if (!utils.FileWriteChecked(temp, MinFreq.c_str()))
-            logger.Warn("频率写入失败: %s", temp);
-        logger.Debug("CPU簇: %d 最小频率: %s", Policy, MinFreq.c_str());
+        if (!ppmApplied) {
+            writeNode(temp, effectiveMinFreq, "最小频率");
+        }
+        logger.Debug("CPU簇: %d 最小频率: %s (配置=%s)", Policy, effectiveMinFreq.c_str(), MinFreq.c_str());
 
         FastSnprintf(temp, sizeof(temp), MaxFreqPath, Policy);
-        if (!utils.FileWriteChecked(temp, MaxFreq.c_str()))
-            logger.Warn("频率写入失败: %s", temp);
-        logger.Debug("CPU簇: %d 最大频率: %s", Policy, MaxFreq.c_str());
+        if (!ppmApplied) {
+            writeNode(temp, effectiveMaxFreq, "最大频率");
+        }
+        logger.Debug("CPU簇: %d 最大频率: %s (配置=%s)", Policy, effectiveMaxFreq.c_str(), MaxFreq.c_str());
 
         FastSnprintf(temp, sizeof(temp), GovernorPath, Policy);
-        if (!utils.FileWriteChecked(temp, Governor.c_str()))
-            logger.Warn("调速器写入失败: %s", temp);
+        writeNode(temp, Governor.c_str(), "调速器");
         logger.Debug("CPU簇: %d 调速器: %s", Policy, Governor.c_str());
     }
 
     void Boost() {
         for (int i = 0; i <= 3; i++) {
             if (Policy::CpuPolicy[i] == -1) continue;
-            FreqWriter(Policy::CpuPolicy[i], Performances::MinFreq[i], 
+            FreqWriter(Policy::CpuPolicy[i], i, Performances::MinFreq[i], 
                     LaunchBoost::BoostFreq[i], Performances::CpuGovernor[i]);
         }
         utils.sleep_ms(LaunchBoost::boost_rate_limit_ms);
@@ -83,45 +337,132 @@ public:
     void Release() {
         for (int i = 0; i <= 3; i++) {
             if (Policy::CpuPolicy[i] == -1) continue;
-            FreqWriter(Policy::CpuPolicy[i], Performances::MinFreq[i], Performances::MaxFreq[i], Performances::CpuGovernor[i]);
+            FreqWriter(Policy::CpuPolicy[i], i, Performances::MinFreq[i], Performances::MaxFreq[i], Performances::CpuGovernor[i]);
         }
-        function.FeasFunc(false);
     }
 
-    // 风驰: 频率不限制 (先切一次 performance 再切目标调速器)
     void applyOnePlusMode() {
-        const char* gov = oneoppo.getGovernor();
-        logger.Info("风驰增强: 调速器 %s 频率不限制", gov);
+        const std::string& gov = onePlus.getGovernor();
+        if (gov.empty()) {
+            logger.Warn("风驰增强: 调速器不可用，跳过");
+            return;
+        }
+        logger.Info("风驰增强: 调速器 %s 频率不限制", gov.c_str());
         for (int i = 0; i <= 3; i++) {
             if (Policy::CpuPolicy[i] == -1) continue;
-            FreqWriter(Policy::CpuPolicy[i], "0", "2147483647", "performance");
+            FreqWriter(Policy::CpuPolicy[i], i, "0", "2147483647", "performance");
         }
         for (int i = 0; i <= 3; i++) {
             if (Policy::CpuPolicy[i] == -1) continue;
-            FreqWriter(Policy::CpuPolicy[i], "0", "2147483647", gov);
+            FreqWriter(Policy::CpuPolicy[i], i, "0", "2147483647", gov.c_str());
         }
-        GameMode::active = true;
     }
 
-    void release() {
-        logger.Info("情景模式: %s 已启用", conf.mode.c_str());
-        if (cpuBoost) {
+    void release(bool launchBoost) {
+        if (lastReleasedMode != conf.mode) {
+            logger.Info("情景模式: %s 已启用", conf.mode.c_str());
+            lastReleasedMode = conf.mode;
+        }
+        if (launchBoost && LaunchBoost::enable) {
             Boost();
-            cpuBoost = false;
             Release();
-        } else if (conf.mode == "fast" && GameMode::active) {
-            // 风驰的 fast: 有 hmbird/scx 走频率不限制(不按配置文件), 否则按配置文件
-            if (oneoppo.getGovernor() != nullptr) {
+        } else {
+            Release();
+        }
+    }
+
+    void applyCurrentState(bool launchBoost, bool force) {
+        std::lock_guard<std::mutex> lock(Config::applyMutex);
+
+        std::string package;
+        {
+            std::lock_guard<std::mutex> stateLock(stateMutex);
+            package = currentPackage;
+        }
+
+        const std::string configuredMode = appModes.resolve(package);
+        const bool hasExplicitRule = appModes.hasRule(package);
+        const bool leavingExplicitRule = !hasExplicitRule &&
+            package != lastAppliedPackage && lastAppliedHadExplicitRule;
+
+        // 模式决定：单独规则 > 离开规则应用回到默认 > 全局实时(scene/mode.txt) > 默认
+        std::string mode;
+        if (hasExplicitRule) {
+            mode = configuredMode;
+        } else if (leavingExplicitRule) {
+            mode = appModes.defaultMode();
+        } else {
+            const std::string sceneMode = readModeFile();
+            mode = sceneMode.empty() ? configuredMode : sceneMode;
+        }
+
+        const bool packageChanged = package != lastAppliedPackage;
+        const bool modeChanged = mode != effectiveMode;
+        if (!force && !packageChanged && !modeChanged) return;
+
+        // 风驰/FEAS 期望状态：仅 fast 场景才评估，普通模式不读 game_packages
+        const bool wantOnePlus = mode == "fast" && onePlus.available() &&
+                                 GamePackageFile::contains(package);
+        const bool wasOnePlusActive = onePlus.active();
+        const bool wantFeas = mode == "fast" && !wantOnePlus && xiaomiFeas.supports(package);
+        const bool wasFeasActive = xiaomiFeas.active();
+
+        // 同模式且风驰开关状态未变：普通前台应用切换不重写系统，
+        // 只记录前台并输出一次该应用使用的模式日志（应用真切换才打）
+        if (!force && !modeChanged && !effectiveMode.empty() &&
+            wasOnePlusActive == wantOnePlus && wasFeasActive == wantFeas) {
+            {
+                std::lock_guard<std::mutex> stateLock(stateMutex);
+                lastAppliedPackage = package;
+                lastAppliedHadExplicitRule = hasExplicitRule;
+            }
+            if (packageChanged) {
+                lastReportedPackage = package;
+                lastReportedMode = mode;
+                logger.Info("情景模式 %s", mode.c_str());
+            }
+            return;
+        }
+
+        if (!conf.readConfig(mode)) return;
+
+        if (wasOnePlusActive && !wantOnePlus) onePlus.setActive(false);
+        xiaomiFeas.setActive(wantFeas);
+
+        if (wantOnePlus) {
+            // 风驰：进入时完整启动；换到另一个风驰游戏才重设，同一游戏重复触发跳过
+            if (!wasOnePlusActive) {
+                function.CloseAllFunC();
+                onePlus.setActive(true);
                 applyOnePlusMode();
-            } else {
-                Release();
+            } else if (packageChanged) {
+                applyOnePlusMode();
             }
         } else {
-            // 非风驰 (无论是否 fast) 及官方模式: 按配置文件 (自动恢复官方调速器)
-            Release();
+            release(launchBoost);
+            SchedParam();
+            online();
+            if (wasOnePlusActive) {
+                function.AllFunC();
+                logger.Info("退出风驰: 已按配置恢复附加优化");
+            }
+        }
+
+        {
+            std::lock_guard<std::mutex> stateLock(stateMutex);
+            effectiveMode = mode;
+            lastAppliedPackage = package;
+            lastAppliedHadExplicitRule = hasExplicitRule;
+        }
+
+        // mode.txt 同步为当前实际生效模式（writeCurrentMode 内部同值不写盘，防循环）
+        if (packageChanged || modeChanged) {
+            appModes.writeCurrentMode(mode);
+            lastReportedPackage = package;
+            lastReportedMode = mode;
+            logger.Info("情景模式 %s", mode.c_str());
         }
     }
-
     void online() {
         for (int i = 0; i <= 7; i++) {
             FastSnprintf(temp, sizeof(temp), onlinePath, i);
@@ -141,55 +482,55 @@ public:
         }
     }
 
-    void configTriggerTask() {
-        sleep(2);
-        while (true) {
-            utils.InotifyMain(configPath, IN_CLOSE_WRITE | IN_MODIFY);
-            std::lock_guard<std::mutex> lock(Config::applyMutex);
-            if (!conf.readConfig()) continue;
-            release();
-            SchedParam();
-            online();
-        }
-    }
-
     void jsonTriggerTask() {
-        sleep(2);
         while (true) {
-            utils.InotifyMain(jsonPath, IN_CLOSE_WRITE | IN_MODIFY);
-            std::lock_guard<std::mutex> lock(Config::applyMutex);
-            conf.readConfig();
+            utils.InotifyMain(jsonPath, IN_CLOSE_WRITE);
+            applyCurrentState(false, true);
             logger.setLogLevel(Meta::loglevel);
-            function.AllFunC();
         }
     }
 
     void Init() {
         char buf[256] = { 0 };
-        // 进程名: Littleyouran (修复: pidof 无输出(无重复进程)时 popenRead 返回 0, 不应视为检测失败)
+        if (anotherInstanceRunning()) {
         const size_t runLen = utils.popenRead("pidof Littleyouran", buf, sizeof(buf) - 1);
-        if (runLen > 0) {
-            buf[runLen] = 0;
-            auto ptr = strchr(buf, ' ');
-
-            if (ptr) {
-                logger.Error("CTS调度已经在运行(pid: %s), 当前进程(pid:%d)即将退出", buf, getpid());
-                printf("\n!!! \n!!! CTS调度已经在运行(pid: %s), 当前进程(pid:%d)即将退出 \n!!!\n\n", buf, getpid());
-                exit(-1);
-            }
+            buf[std::min(runLen, sizeof(buf) - 1)] = '\0';
+            logger.Error("CTS调度已经在运行(pid: %s), 当前进程(pid:%d)即将退出", buf, getpid());
+            printf("\n!!! \n!!! CTS调度已经在运行(pid: %s), 当前进程(pid:%d)即将退出 \n!!!\n\n", buf, getpid());
+            exit(-1);
         }
 
-        logger.clear_log();
-        conf.readConfig();
+        if (!appModes.initialize()) exit(-1);
+        conf.readConfig(appModes.defaultMode());
         logger.setLogLevel(Meta::loglevel);
-        logger.Info("名称: %s", Meta::name.empty() ? "CpuTurboScheduler" : Meta::name.c_str());
+        logger.Info("名称: %s", Meta::name.empty() ? "Littleyouran" : Meta::name.c_str());
         logger.Info("版本: %d", Meta::version);
         logger.Info("作者: %s", Meta::author.empty() ? "Unknown" : Meta::author.c_str());
         logger.Info("日志等级: %s", Meta::loglevel.empty() ? "INFO" : Meta::loglevel.c_str());
+        const bool onePlusReady = onePlus.Init();
+        const bool xiaomiReady = xiaomiFeas.Init();
+        if (onePlusReady || xiaomiReady) {
+            GamePackageFile::write(onePlus.packages(), xiaomiFeas.packages());
+        } else {
+            unlink(GamePackageFile::path);
+        }
         function.AllFunC();
-        oneoppo.Init();
-        release();
+        release(false);
         online();
         SchedParam();
+    }
+
+private:
+    std::mutex stateMutex;
+    std::string lastAppliedPackage;
+
+    std::string getCurrentPackage() {
+        std::lock_guard<std::mutex> lock(stateMutex);
+        return currentPackage;
+    }
+
+    std::string getEffectiveMode() {
+        std::lock_guard<std::mutex> lock(stateMutex);
+        return effectiveMode.empty() ? appModes.defaultMode() : effectiveMode;
     }
 };

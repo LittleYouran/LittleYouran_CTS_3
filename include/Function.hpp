@@ -9,37 +9,55 @@ using namespace Config;
 
 class Function {
 private:
-    static constexpr const char* qcomFeas = "/sys/module/perfmgr/parameters/perfmgr_enable";
-    static constexpr const char* mtkFeas = "/sys/module/mtk_fpsgo/parameters/perfmgr_enable";
     static constexpr const char* ufsPath = "/sys/class/block/sda";
     static constexpr const char* cpusetPath = "/dev/cpuset/";
     static constexpr const char* cpuctlPath = "/dev/cpuctl/";
     static constexpr const char* qcomGpuPath = "/sys/class/kgsl/kgsl-3d0/";
     static constexpr const char* easSchedPath = "/proc/sys/kernel/sched_energy_aware";
+    static constexpr const char* mtkTouchBoostPath = "/proc/perfmgr/tchbst/user/usrtch";
+    static constexpr const char* mtkPpmPolicyStatusPath = "/proc/ppm/policy_status";
+    static constexpr int mtkPpmSysBoostPolicyIndex = 6;
     
     Utils utils;
     Logger logger;
 public:
     void AllFunC() {
-        DisableSystemFreqLimit();
         cpusetFunction();
         disableGpuBoost();
         CfsSchedOpt();
     }
-    void DisableSystemFreqLimit() {
-        if (!utils.FileWriteChecked("/sys/kernel/msm_performance/parameters/cpu_max_freq",
-                        "0:9999999 1:9999999 2:9999999 3:9999999 4:9999999 5:9999999 6:9999999 7:9999999"))
-            logger.Warn("解除 msm cpu_max_freq 限制失败");
-        if (!utils.FileWriteChecked("/sys/kernel/msm_performance/parameters/cpu_min_freq",
-                        "0:0 1:0 2:0 3:0 4:0 5:0 6:0 7:0"))
-            logger.Warn("解除 msm cpu_min_freq 限制失败");
-        chmod("/sys/kernel/msm_performance/parameters/cpu_max_freq", 0000);
-        chmod("/sys/kernel/msm_performance/parameters/cpu_min_freq", 0000);
-        if (access("/proc/game_opt", F_OK) == 0) {
-            if (!utils.FileWriteChecked("/proc/game_opt/disable_cpufreq_limit", "1"))
-                logger.Warn("game_opt disable_cpufreq_limit 写入失败");
+    void disableMtkTouchBoost() {
+        if (access(mtkTouchBoostPath, F_OK) == 0) {
+            writeNodeWithModeRestore(mtkTouchBoostPath, "enable 0");
         }
-        logger.Info("已解除系统频率限制");
+
+        if (access(mtkPpmPolicyStatusPath, F_OK) == 0) {
+            char command[32];
+            FastSnprintf(command, sizeof(command), "%d 0", mtkPpmSysBoostPolicyIndex);
+            writeNodeWithModeRestore(mtkPpmPolicyStatusPath, command);
+        }
+    }
+
+    bool writeNodeWithModeRestore(const char* path, const char* value) {
+        struct stat nodeStat{};
+        if (stat(path, &nodeStat) != 0) return false;
+
+        const mode_t originalMode = nodeStat.st_mode & 07777;
+        int fd = open(path, O_WRONLY | O_NONBLOCK);
+        if (fd < 0) {
+            if (chmod(path, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP) != 0) return false;
+            fd = open(path, O_WRONLY | O_NONBLOCK);
+        }
+        if (fd < 0) {
+            chmod(path, originalMode);
+            return false;
+        }
+
+        const size_t length = Faststrlen(value);
+        const bool written = write(fd, value, length) == static_cast<ssize_t>(length);
+        close(fd);
+        const bool restored = chmod(path, originalMode) == 0;
+        return written && restored;
     }
 
     void CloseAllFunC() {
@@ -58,10 +76,13 @@ public:
         }
 
         if (checkQcom()) {
-            utils.WriteInt("/sys/class/kgsl/kgsl-3d0/default_pwrlevel", 0);
-            utils.WriteInt("/sys/class/kgsl/kgsl-3d0/min_pwrlevel", 0);
+            const int levels = utils.readInt("/sys/class/kgsl/kgsl-3d0/num_pwrlevels");
+            if (levels > 0) {
+                const int lowestLevel = levels - 1;
+                utils.WriteInt("/sys/class/kgsl/kgsl-3d0/default_pwrlevel", lowestLevel);
+                utils.WriteInt("/sys/class/kgsl/kgsl-3d0/min_pwrlevel", lowestLevel);
+            }
             utils.WriteInt("/sys/class/kgsl/kgsl-3d0/max_pwrlevel", 0);
-            logger.Debug("GPU 恢复默认性能层级");
         }
 
         utils.FileWrite("/proc/sys/kernel/sched_schedstats", "0");
@@ -77,7 +98,7 @@ public:
         }
         logger.Debug("CFS 调度器参数恢复默认");
 
-        logger.Info("风驰: 已关闭附加优化");
+        logger.Info("已关闭附加优化");
     }
     
     void cpusetFunction() {
@@ -157,33 +178,10 @@ public:
         logger.Info("CFS调度器已优化完毕");
     }
 
-    bool FeasFunc(bool Enable) {
-        if (checkQcomFeas()) {
-            utils.FileWrite(qcomFeas, Enable ? "1" : "0");
-            logger.Debug("QCOM Feas 已%s", Enable ? "开启" : "关闭");
-            return true;
-        } 
-
-        if (checkMtkFeas()) {
-            utils.FileWrite(mtkFeas, Enable ? "1" : "0");
-            logger.Debug("MTK Feas 已%s", Enable ? "开启" : "关闭");
-            return true;
-        }
-        return false;
-    }
-
     bool checkQcom() const {
         return (!access(qcomGpuPath, F_OK));
     }
 private:
-    bool checkQcomFeas() const {
-        return (!access(qcomFeas, F_OK));
-    }
-    
-    bool checkMtkFeas() const {
-        return (!access(mtkFeas, F_OK));
-    }
-    
     bool checkEasSched() const {
         return (!access(easSchedPath, F_OK));
     }
