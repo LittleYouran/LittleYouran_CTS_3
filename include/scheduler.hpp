@@ -287,9 +287,6 @@ public:
         });
         foregroundMonitor.start(
             [this](const std::string& package) {
-                // top-app can be momentarily empty while Android moves tasks
-                // between cgroups. Keep the last app so vendor integrations do
-                // not flap during that transition.
                 if (package.empty()) return;
                 {
                     std::lock_guard<std::mutex> stateLock(stateMutex);
@@ -385,7 +382,6 @@ public:
         const bool leavingExplicitRule = !hasExplicitRule &&
             package != lastAppliedPackage && lastAppliedHadExplicitRule;
 
-        // 模式决定：单独规则 > 离开规则应用回到默认 > 全局实时(scene/mode.txt) > 默认
         std::string mode;
         if (hasExplicitRule) {
             mode = configuredMode;
@@ -400,15 +396,12 @@ public:
         const bool modeChanged = mode != effectiveMode;
         if (!force && !packageChanged && !modeChanged) return;
 
-        // 风驰/FEAS 期望状态：仅 fast 场景才评估，普通模式不读 game_packages
         const bool wantOnePlus = mode == "fast" && onePlus.available() &&
                                  GamePackageFile::contains(package);
         const bool wasOnePlusActive = onePlus.active();
         const bool wantFeas = mode == "fast" && !wantOnePlus && xiaomiFeas.supports(package);
         const bool wasFeasActive = xiaomiFeas.active();
 
-        // 同模式且风驰开关状态未变：普通前台应用切换不重写系统，
-        // 只记录前台并输出一次该应用使用的模式日志（应用真切换才打）
         if (!force && !modeChanged && !effectiveMode.empty() &&
             wasOnePlusActive == wantOnePlus && wasFeasActive == wantFeas) {
             {
@@ -430,7 +423,6 @@ public:
         xiaomiFeas.setActive(wantFeas);
 
         if (wantOnePlus) {
-            // 风驰：进入时完整启动；换到另一个风驰游戏才重设，同一游戏重复触发跳过
             if (!wasOnePlusActive) {
                 function.CloseAllFunC();
                 onePlus.setActive(true);
@@ -455,7 +447,6 @@ public:
             lastAppliedHadExplicitRule = hasExplicitRule;
         }
 
-        // mode.txt 同步为当前实际生效模式（writeCurrentMode 内部同值不写盘，防循环）
         if (packageChanged || modeChanged) {
             appModes.writeCurrentMode(mode);
             lastReportedPackage = package;
