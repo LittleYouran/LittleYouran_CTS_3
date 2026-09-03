@@ -254,6 +254,20 @@ public:
         return !rules.empty();
     }
 
+    bool readDefaultMode(std::string& out) const {
+        const std::string xml = readFile();
+        if (xml.empty()) return false;
+        bool found = false;
+        forEachString(xml, [&](const Entry& entry) {
+            if (!found && entry.name == "*" &&
+                AppModeConfig::isSupportedMode(entry.value)) {
+                out = entry.value;
+                found = true;
+            }
+        });
+        return found;
+    }
+
     bool syncRules(const AppModeConfig::Rules& rules, const bool refreshRunning = false) const {
         if (access(directoryPath, F_OK) != 0) return false;
 
@@ -410,7 +424,6 @@ public:
             return false;
         }
 
-        // Scene 同步
         if (scene_.available()) scene_.syncRules(config_.rules());
         return true;
     }
@@ -419,6 +432,9 @@ public:
         callback_ = std::move(callback);
         running_.store(true, std::memory_order_relaxed);
         std::thread(&AppModeService::watchLocalFiles, this).detach();
+        if (scene_.available()) {
+            std::thread(&AppModeService::watchSceneDefault, this).detach();
+        }
     }
 
     bool setRule(const std::string& package, const std::string& mode) {
@@ -485,6 +501,45 @@ private:
             mode.pop_back();
         }
         return mode;
+    }
+
+    void handleSceneDefaultChange() {
+        std::string sceneDefault;
+        if (!scene_.readDefaultMode(sceneDefault)) return;
+
+        std::lock_guard<std::mutex> lock(syncMutex_);
+        if (sceneDefault == config_.defaultMode()) return;
+        if (!config_.setRule("*", sceneDefault)) return;
+        notifyChanged();
+    }
+
+    void watchSceneDefault() {
+        const int fd = inotify_init1(IN_CLOEXEC);
+        if (fd < 0) return;
+        const int wd = inotify_add_watch(fd, ScenePowerConfig::directoryPath,
+            IN_CLOSE_WRITE | IN_MOVED_TO | IN_CREATE);
+        if (wd < 0) {
+            close(fd);
+            return;
+        }
+
+        char buffer[4096];
+        while (running_.load(std::memory_order_relaxed)) {
+            const ssize_t length = read(fd, buffer, sizeof(buffer));
+            if (length <= 0) continue;
+
+            bool xmlChanged = false;
+            for (const char* cursor = buffer; cursor < buffer + length;) {
+                const auto* event = reinterpret_cast<const inotify_event*>(cursor);
+                if (event->wd == wd && event->len > 0 &&
+                    std::strcmp(event->name, "powercfg.xml") == 0) {
+                    xmlChanged = true;
+                }
+                cursor += sizeof(inotify_event) + event->len;
+            }
+            if (xmlChanged) handleSceneDefaultChange();
+        }
+        close(fd);
     }
 
     void handleLocalChange(bool appConfigChanged) {

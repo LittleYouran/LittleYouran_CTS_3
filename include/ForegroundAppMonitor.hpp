@@ -32,7 +32,6 @@ private:
     static constexpr const char* topAppDirectory =
         "/dev/cpuset/top-app";
 
-    // 小窗
     static bool isIgnoredShell(const std::string& process) {
         static constexpr const char* kIgnoredPrefixes[] = {
             "com.coloros.assistantscreen",
@@ -89,10 +88,6 @@ private:
         int pid = -1;
     };
 
-    // 从 top-app 进程集挑选前台主应用：
-    //  1) 忽略小窗/系统壳
-    //  2) 优先“受关注应用”（配置了单独模式的主屏游戏），避免被小窗内容应用顶掉
-    //  3) 同优先级下取主进程(无 ':')、pid 更大者
     std::string detectPackage(const std::unordered_set<int>& pids) {
         Candidate bestTracked;
         Candidate bestNormal;

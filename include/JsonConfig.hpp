@@ -57,7 +57,7 @@ public:
             logger.Error("解析json配置文件失败 错误: %d", result);
             return false; 
         }
-     
+
         for (int i = 0; i < 4; ++i) {
             Performances::MinFreq[i] = string_t();
             Performances::MaxFreq[i] = string_t();
