@@ -210,16 +210,6 @@ qq邮箱 3218633407@qq.com
 | -------- | -------- | ---------------------------------------------- |
 | enable | bool | 负载均衡总开关 原理:通过调整sched_load_balance和sched_relax_domain_level达到负载均衡 | 
 
-#### OfficialMode设置
-```json
-      "OfficialMode": {
-          "enable": false
-      },
-```
-| 字段名   | 数据类型 | 描述                                           |
-| -------- | -------- | ---------------------------------------------- |
-| enable | bool | 风驰官方调度开关 开启后极速模式将恢复调速器和频率修改 确保风驰调度能正常使用 | 
-
 #### LaunchBoost设置
 ```json
     "LaunchBoost": {
