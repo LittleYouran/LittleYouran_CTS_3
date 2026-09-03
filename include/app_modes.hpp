@@ -1,12 +1,5 @@
 #pragma once
 
-// ============================================================
-// 应用单独模式模块（App Modes）：
-//   AppModeConfig    —— 规则存储（app_modes.txt / mode.txt）
-//   ScenePowerConfig —— 同步到 Scene 的 powercfg.xml（单向）
-//   AppModeService   —— 服务入口：规则读写、文件监听、通知
-// ============================================================
-
 #include <algorithm>
 #include <atomic>
 #include <cctype>
@@ -404,9 +397,6 @@ private:
         if (utils.popenRead("pidof com.omarea.vtools", pids, sizeof(pids) - 1) == 0) {
             return;
         }
-        // 后台静默重启：仅结束 Scene 进程使其重新冷加载 powercfg.xml。
-        // 若 Scene 常驻(START_STICKY)已启用会自动在后台复活，不会跳到前台；
-        // 未启用常驻则 Scene 保持停止，用户下次打开时会读取到新配置。
         utils.exec("pkill -f com.omarea.vtools");
     }
 };
@@ -421,7 +411,6 @@ public:
             return false;
         }
 
-        // Scene 只作为同步目标，不反向导入其已有配置。
         if (scene_.available()) scene_.syncRules(config_.rules());
         return true;
     }
