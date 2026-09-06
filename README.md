@@ -98,7 +98,7 @@ Q: 其他问题怎么办？<br>
 A：群里私聊或发到我的qq邮箱 （qq邮箱 3218633407@qq.com）<br>
 
 #### 一些其他问题与说明<br>
-0. 使用scene 或者 webui 接管（二选一）
+0. 可以同时使用scene和webui，但是 还是强烈推荐使用其中之一
 1. 不可以和其他调度一起使用
 2. 可以使用线程模块
 3. 使用优化模块自行排查是否冲突
@@ -114,10 +114,14 @@ A：群里私聊或发到我的qq邮箱 （qq邮箱 3218633407@qq.com）<br>
 12. 务必反馈功耗图的话  游戏 6-10 分钟  日常 1 小时左右或以上
 13. 恢复了官方调度但与官方调度可能存在一些差异，但应该不会太大
 14. 不要删除应用增强服务
+15. 若要使用feas请不要禁用掉小米的joyose
+16. 增加了app-modes.txt作为默认模式和应用单独模式的同意配置文件
+17. 增加一个game_apckages.md文件作为存放风驰或feas适配的游戏包名
+17附加 以上的这些文件（app-modes.txt 、 game_apckages.md等全部在路径的/storage/emulated/0/Android/CTS/）
+18. 增加一个action.sh文件在路径/data/adb/modules/LittleYouran/， 作用是原来应对使用风驰增强模块 在使用过程中增加一些包名，这个只是为了做一次重新解析
 
 ## 群聊与反馈
 1群 545504856
-2群 872472793
 qq邮箱 3218633407@qq.com
 
 ## 配置文件说明
@@ -363,5 +367,5 @@ echo "powersave" > /sdcard/Android/cts/config.txt
 [作者:MoWei 项目:LibUtils](https://github.com/MoWei-2077/FastStdLib) <br>
 [作者:MoWei 项目:LibUtils](https://github.com/MoWei-2077/MW_CpuTurboScheduler.git) <br>
 
-### 该文档更新于:2026/08/17
+### 该文档更新于:2026/09/07
 - 感谢所有用户的测试反馈 这将推进LittleYouran_CTS （CPU Turbo Scheduler）的开发
